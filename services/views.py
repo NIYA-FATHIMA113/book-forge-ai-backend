@@ -1,3 +1,30 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404
 
-# Create your views here.
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+
+from tenants.models import Tenant
+from .models import Service
+from .serializers import ServiceSerializer
+
+
+class ServiceListCreateView(generics.ListCreateAPIView):
+    serializer_class = ServiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_tenant(self):
+        return get_object_or_404(
+            Tenant,
+            id=self.kwargs["tenant_id"],
+            owner=self.request.user,
+        )
+
+    def get_queryset(self):
+        return Service.objects.filter(
+            tenant=self.get_tenant()
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            tenant=self.get_tenant()
+        )
