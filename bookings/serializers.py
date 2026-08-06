@@ -23,14 +23,20 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         tenant = self.context["tenant"]
+        service = attrs["service"]
 
-        booking_exists = Booking.objects.filter(
+        # Ensure the selected service belongs to this tenant
+        if service.tenant != tenant:
+            raise serializers.ValidationError(
+                "Invalid service selected."
+            )
+
+        # Prevent duplicate bookings
+        if Booking.objects.filter(
             tenant=tenant,
             booking_date=attrs["booking_date"],
             booking_time=attrs["booking_time"],
-        ).exists()
-
-        if booking_exists:
+        ).exists():
             raise serializers.ValidationError(
                 "This time slot is already booked."
             )

@@ -1,6 +1,6 @@
 from django.db import models
 from tenants.models import Tenant
-
+from services.models import Service
 
 class Booking(models.Model):
     tenant = models.ForeignKey(
@@ -15,7 +15,11 @@ class Booking(models.Model):
     booking_date = models.DateField()
     booking_time = models.TimeField()
 
-    service = models.CharField(max_length=100)
+    service = models.ForeignKey(
+    Service,
+    on_delete=models.PROTECT,
+    related_name="bookings"
+)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
