@@ -1,10 +1,10 @@
 from django.urls import path
-from .views import BusinessHoursListCreateView
+from .views import AvailableSlotsView
 
 urlpatterns = [
     path(
-        "",
-        BusinessHoursListCreateView.as_view(),
-        name="business-hours"
+        "book/<slug:slug>/available-slots/",
+        AvailableSlotsView.as_view(),
+        name="available-slots",
     ),
 ]

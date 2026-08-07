@@ -23,6 +23,6 @@ urlpatterns = [
     path("api/tenants/", include("tenants.urls")),
     path("api/", include("bookings.urls")),
     path("api/", include("services.urls")),
-    path("api/availability/", include("availability.urls")),
+    path("api/", include("availability.urls")),
 ]
 
