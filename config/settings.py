@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'common',
     'bookings',
     'services',
+    'availability',
 ]
 
 MIDDLEWARE = [
