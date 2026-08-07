@@ -32,3 +32,14 @@ class BookingListView(generics.ListAPIView):
         return Booking.objects.filter(
             tenant__owner=self.request.user
         ).order_by("-booking_date", "-booking_time")
+
+
+class BookingDeleteView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+
+    queryset = Booking.objects.all()
+
+    def get_queryset(self):
+        return Booking.objects.filter(
+            tenant__owner=self.request.user
+        )
