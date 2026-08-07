@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     # Third Party Apps
     'rest_framework',
     'corsheaders',
+    'drf_spectacular',
 
     # Local Apps
     'accounts',
@@ -90,9 +91,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "bookforge_db",
+        "USER": "postgres",
+        "PASSWORD": "#Hello1234",
+        "HOST": "localhost",
+        "PORT": "5432",
     }
 }
 
@@ -140,6 +145,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 5,
+
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # CORS
@@ -150,3 +160,26 @@ CORS_ALLOWED_ORIGINS = [
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "BookForge AI API",
+    "DESCRIPTION": "Booking platform backend built with Django REST Framework",
+    "VERSION": "1.0.0",
+
+    "SECURITY": [
+        {
+            "BearerAuth": []
+        }
+    ],
+
+    "COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
+}
