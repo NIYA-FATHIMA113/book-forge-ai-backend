@@ -29,10 +29,30 @@ class BookingListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Booking.objects.filter(
+        queryset = Booking.objects.filter(
             tenant__owner=self.request.user
-        ).order_by("-booking_date", "-booking_time")
+        )
 
+        booking_date = self.request.query_params.get("date")
+        customer = self.request.query_params.get("customer")
+        service = self.request.query_params.get("service")
+
+        if booking_date:
+            queryset = queryset.filter(
+                booking_date=booking_date
+            )
+
+        if customer:
+            queryset = queryset.filter(
+                customer_name__icontains=customer
+            )
+
+        if service:
+            queryset = queryset.filter(
+                service_id=service
+            )
+
+        return queryset
 
 class BookingDeleteView(generics.DestroyAPIView):
     permission_classes = [IsAuthenticated]
