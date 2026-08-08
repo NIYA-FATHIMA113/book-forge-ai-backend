@@ -3,6 +3,13 @@ from tenants.models import Tenant
 from services.models import Service
 
 class Booking(models.Model):
+    STATUS_CHOICES = [
+        ("PENDING", "Pending"),
+        ("CONFIRMED", "Confirmed"),
+        ("COMPLETED", "Completed"),
+        ("CANCELLED", "Cancelled"),
+    ]
+
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,
@@ -16,10 +23,16 @@ class Booking(models.Model):
     booking_time = models.TimeField()
 
     service = models.ForeignKey(
-    Service,
-    on_delete=models.PROTECT,
-    related_name="bookings"
-)
+        Service,
+        on_delete=models.PROTECT,
+        related_name="bookings"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="PENDING"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

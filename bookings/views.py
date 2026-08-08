@@ -4,7 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from tenants.models import Tenant
 from .models import Booking
 from .serializers import BookingSerializer
-
+from rest_framework.response import Response
+from rest_framework import status
 
 class BookingCreateView(generics.CreateAPIView):
     serializer_class = BookingSerializer
@@ -36,6 +37,7 @@ class BookingListView(generics.ListAPIView):
         booking_date = self.request.query_params.get("date")
         customer = self.request.query_params.get("customer")
         service = self.request.query_params.get("service")
+        booking_status = self.request.query_params.get("status")
 
         if booking_date:
             queryset = queryset.filter(
@@ -52,6 +54,11 @@ class BookingListView(generics.ListAPIView):
                 service_id=service
             )
 
+        if booking_status:
+            queryset = queryset.filter(
+                status=booking_status.upper()
+            )
+
         return queryset
 
 class BookingDeleteView(generics.DestroyAPIView):
@@ -62,4 +69,41 @@ class BookingDeleteView(generics.DestroyAPIView):
     def get_queryset(self):
         return Booking.objects.filter(
             tenant__owner=self.request.user
+        )
+
+
+class BookingStatusUpdateView(generics.UpdateAPIView):
+    serializer_class = BookingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Booking.objects.filter(
+            tenant__owner=self.request.user
+        )
+
+    def update(self, request, *args, **kwargs):
+        booking = self.get_object()
+
+        new_status = request.data.get("status")
+
+        allowed_statuses = [
+            "PENDING",
+            "CONFIRMED",
+            "COMPLETED",
+            "CANCELLED",
+        ]
+
+        if new_status not in allowed_statuses:
+            return Response(
+                {
+                    "error": "Invalid booking status."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        booking.status = new_status
+        booking.save()
+
+        return Response(
+            BookingSerializer(booking).data
         )

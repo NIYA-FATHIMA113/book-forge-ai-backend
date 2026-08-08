@@ -29,7 +29,21 @@ class DashboardView(APIView):
         total_services = Service.objects.filter(
             tenant__owner=request.user
         ).count()
+        pending_bookings = bookings.filter(
+            status="PENDING"
+        ).count()
 
+        confirmed_bookings = bookings.filter(
+            status="CONFIRMED"
+        ).count()
+
+        completed_bookings = bookings.filter(
+            status="COMPLETED"
+        ).count()
+
+        cancelled_bookings = bookings.filter(
+            status="CANCELLED"
+        ).count()
         today_revenue = (
             bookings.filter(
                 booking_date=today
@@ -43,4 +57,8 @@ class DashboardView(APIView):
             "today_revenue": today_revenue,
             "total_bookings": total_bookings,
             "total_services": total_services,
+            "pending_bookings": pending_bookings,
+            "confirmed_bookings": confirmed_bookings,
+            "completed_bookings": completed_bookings,
+            "cancelled_bookings": cancelled_bookings,
         })
