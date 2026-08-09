@@ -1,5 +1,13 @@
 from django.urls import path
-from .views import BookingCreateView, BookingListView,BookingDeleteView,BookingStatusUpdateView
+
+from .views import (
+    BookingCreateView,
+    BookingListView,
+    BookingDeleteView,
+    BookingStatusUpdateView,
+    AvailableSlotsView,
+    PublicBookingDetailView,
+)
 
 urlpatterns = [
     path(
@@ -24,4 +32,14 @@ urlpatterns = [
         BookingStatusUpdateView.as_view(),
         name="booking-status-update",
     ),
-]
+    path(
+        "book/<slug:slug>/available-slots/",
+        AvailableSlotsView.as_view(),
+        name="available-slots"
+    ),
+    path(
+        "book/<slug:slug>/booking/<int:pk>/",
+        PublicBookingDetailView.as_view(),
+        name="public-booking-detail",
+    ),
+    ]

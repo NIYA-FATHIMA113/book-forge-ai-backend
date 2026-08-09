@@ -72,6 +72,8 @@ def has_booking_conflict(
     bookings = Booking.objects.filter(
         tenant=tenant,
         booking_date=booking_date
+    ).exclude(
+        status="CANCELLED"
     )
 
     for booking in bookings:
