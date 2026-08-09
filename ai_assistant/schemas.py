@@ -74,3 +74,53 @@ class BusinessInfo(BaseModel):
         default=None,
         description="Standard booking length in minutes."
     )
+    number_of_resources: Optional[int] = Field(
+        default=None,
+        description="""
+        Number of independently bookable resources available
+        for the business, such as pitches, rooms, chairs,
+        doctors, courts, tables, or similar resources.
+        """
+    )
+class BookingRequest(BaseModel):
+    business_name: Optional[str] = Field(
+        default=None,
+        description="Name of the business the customer wants to book."
+    )
+
+    booking_date: Optional[str] = Field(
+        default=None,
+        description="""
+        Date requested by the customer.
+        Preserve relative expressions exactly, such as:
+        today, tomorrow, day after tomorrow,
+        Monday, Tuesday, Friday.
+        If the customer provides an exact date,
+        return it as YYYY-MM-DD.
+        """
+    )
+
+    booking_time: Optional[str] = Field(
+        default=None,
+        description="Requested booking start time in HH:MM format."
+    )
+
+    duration_minutes: Optional[int] = Field(
+        default=None,
+        description="Requested booking duration in minutes."
+    )
+
+    service_name: Optional[str] = Field(
+        default=None,
+        description="Name of the service or resource the customer wants to book."
+    )
+
+    customer_name: Optional[str] = Field(
+        default=None,
+        description="Customer's name."
+    )
+
+    customer_phone: Optional[str] = Field(
+        default=None,
+        description="Customer's phone number."
+    )

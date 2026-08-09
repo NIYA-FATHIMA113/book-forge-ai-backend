@@ -64,7 +64,19 @@ def update_business_configuration(
         configuration.booking_length_minutes = (
             business_info.booking_length_minutes
         )
-
+    if business_info.number_of_resources is not None:
+        configuration.number_of_resources = (
+            business_info.number_of_resources
+        )
+    if business_info.services:
+        configuration.services = [
+            {
+                "name": service.name,
+                "price": service.price,
+                "duration_minutes": service.duration_minutes,
+            }
+            for service in business_info.services
+        ]
     configuration.save()
 
     return configuration

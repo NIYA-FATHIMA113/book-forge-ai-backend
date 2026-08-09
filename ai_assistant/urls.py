@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     AIChatView,
     AIConfirmSetupView,
+    AIBookingView,
 )
 
 urlpatterns = [
@@ -15,5 +16,10 @@ urlpatterns = [
         "confirm/",
         AIConfirmSetupView.as_view(),
         name="ai-confirm-setup",
+    ),
+    path(
+        "book/",
+        AIBookingView.as_view(),
+        name="ai-booking",
     ),
 ]

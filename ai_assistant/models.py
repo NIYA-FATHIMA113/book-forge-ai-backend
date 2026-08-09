@@ -68,6 +68,11 @@ class BusinessConfiguration(models.Model):
         blank=True,
     )
 
+    services = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
     booking_deposit = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -108,7 +113,10 @@ class BusinessConfiguration(models.Model):
         null=True,
         blank=True,
     )
-
+    number_of_resources = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
     is_complete = models.BooleanField(
         default=False,
     )

@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
+
 from availability.models import BusinessHours
+from bookings.models import Booking
 
 
 def get_business_hours(tenant, booking_date):
@@ -8,7 +10,6 @@ def get_business_hours(tenant, booking_date):
     Returns None if no schedule exists.
     """
 
-    # Monday = 0, Tuesday = 1, ..., Sunday = 6
     day = booking_date.weekday()
 
     try:
@@ -19,7 +20,12 @@ def get_business_hours(tenant, booking_date):
     except BusinessHours.DoesNotExist:
         return None
 
-def is_within_business_hours(business_hours, booking_time, duration):
+
+def is_within_business_hours(
+    business_hours,
+    booking_time,
+    duration
+):
     """
     Returns True if the booking starts and ends
     within business hours.
@@ -30,7 +36,10 @@ def is_within_business_hours(business_hours, booking_time, duration):
         booking_time
     )
 
-    booking_end = booking_start + timedelta(minutes=duration)
+    booking_end = (
+        booking_start +
+        timedelta(minutes=duration)
+    )
 
     opening = datetime.combine(
         datetime.today(),
@@ -47,19 +56,17 @@ def is_within_business_hours(business_hours, booking_time, duration):
         booking_end <= closing
     )
 
-from datetime import datetime, timedelta
-from bookings.models import Booking
 
 
 def has_booking_conflict(
-    tenant,
+    resource,
     booking_date,
     booking_time,
     duration,
 ):
     """
-    Returns True if the new booking overlaps
-    with any existing booking.
+    Returns True if the specific resource already has
+    an overlapping booking.
     """
 
     new_start = datetime.combine(
@@ -67,10 +74,12 @@ def has_booking_conflict(
         booking_time
     )
 
-    new_end = new_start + timedelta(minutes=duration)
+    new_end = new_start + timedelta(
+        minutes=duration
+    )
 
     bookings = Booking.objects.filter(
-        tenant=tenant,
+        resource=resource,
         booking_date=booking_date
     ).exclude(
         status="CANCELLED"
@@ -83,16 +92,13 @@ def has_booking_conflict(
             booking.booking_time
         )
 
-        existing_end = (
-            existing_start +
-            timedelta(
-                minutes=booking.service.duration
-            )
+        existing_end = existing_start + timedelta(
+            minutes=booking.service.duration
         )
 
         if (
-            new_start < existing_end and
-            new_end > existing_start
+            new_start < existing_end
+            and new_end > existing_start
         ):
             return True
 

@@ -6,6 +6,7 @@ from .views import (
     BookingDeleteView,
     BookingStatusUpdateView,
     AvailableSlotsView,
+    DashboardSummaryView,
     PublicBookingDetailView,
 )
 
@@ -41,5 +42,10 @@ urlpatterns = [
         "book/<slug:slug>/booking/<int:pk>/",
         PublicBookingDetailView.as_view(),
         name="public-booking-detail",
+    ),
+    path(
+        "dashboard/summary/",
+        DashboardSummaryView.as_view(),
+        name="dashboard-summary",
     ),
     ]

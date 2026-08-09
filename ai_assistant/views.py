@@ -1,12 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .services.business_setup import (
-    create_business_from_configuration,
-)
+from rest_framework import status
+
 from .models import (
     AIConversation,
     AIMessage,
+    BusinessConfiguration,
 )
 
 from .serializers import AIChatSerializer
@@ -20,21 +20,37 @@ from .services.business_config import (
     update_business_configuration,
 )
 
+from .services.business_setup import (
+    create_business_from_configuration,
+)
+
+# Keep this for now only if you still want the
+# customer-facing AI booking endpoint as a future feature.
+from .services.booking_ai import process_booking_request
+
 
 class AIChatView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
 
+        # -----------------------------
+        # 1. Validate request
+        # -----------------------------
+
         serializer = AIChatSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         message = serializer.validated_data["message"]
+
         conversation_id = serializer.validated_data.get(
             "conversation_id"
         )
 
-        # Get existing conversation
+        # -----------------------------
+        # 2. Get or create conversation
+        # -----------------------------
+
         if conversation_id:
 
             conversation = AIConversation.objects.filter(
@@ -47,10 +63,9 @@ class AIChatView(APIView):
                     {
                         "error": "Conversation not found."
                     },
-                    status=404,
+                    status=status.HTTP_404_NOT_FOUND,
                 )
 
-        # Create new conversation
         else:
 
             conversation = AIConversation.objects.create(
@@ -58,14 +73,20 @@ class AIChatView(APIView):
                 title="New Business Setup",
             )
 
-        # Save owner's message
+        # -----------------------------
+        # 3. Save owner's message
+        # -----------------------------
+
         AIMessage.objects.create(
             conversation=conversation,
             role="user",
             content=message,
         )
 
-        # Get complete conversation history
+        # -----------------------------
+        # 4. Build conversation history
+        # -----------------------------
+
         messages = conversation.messages.order_by(
             "created_at"
         )
@@ -80,123 +101,173 @@ class AIChatView(APIView):
                 else "model"
             )
 
-            conversation_history.append({
-                "role": role,
-                "parts": [
-                    {
-                        "text": msg.content
-                    }
-                ],
-            })
+            conversation_history.append(
+                {
+                    "role": role,
+                    "parts": [
+                        {
+                            "text": msg.content
+                        }
+                    ],
+                }
+            )
 
-        # Generate Gemini response
+        # -----------------------------
+        # 5. Generate AI response
+        # -----------------------------
+
         ai_response = generate_ai_response(
             conversation_history
         )
 
-        # Save Gemini response
+        # -----------------------------
+        # 6. Save AI response
+        # -----------------------------
+
         AIMessage.objects.create(
             conversation=conversation,
             role="assistant",
             content=ai_response,
         )
 
-        # Extract structured business information
+        # -----------------------------
+        # 7. Extract business information
+        # -----------------------------
+
         business_info = extract_business_info(
             message
         )
 
-        # Update BusinessConfiguration
+        # -----------------------------
+        # 8. Update configuration
+        # -----------------------------
+
         configuration = update_business_configuration(
             conversation,
             business_info,
         )
 
-        return Response({
-            "conversation_id": conversation.id,
+        # -----------------------------
+        # 9. Return response
+        # -----------------------------
 
-            "message": ai_response,
+        return Response(
+            {
+                "conversation_id": conversation.id,
 
-            "business_configuration": {
-                "business_name": (
-                    configuration.business_name
-                ),
+                "message": ai_response,
 
-                "business_type": (
-                    configuration.business_type
-                ),
+                "business_configuration": {
+                    "business_name": (
+                        configuration.business_name
+                    ),
 
-                "booking_deposit": (
-                    configuration.booking_deposit
-                ),
+                    "business_type": (
+                        configuration.business_type
+                    ),
 
-                "opening_time": (
-                    configuration.opening_time
-                ),
+                    "services": (
+                        configuration.services
+                    ),
 
-                "closing_time": (
-                    configuration.closing_time
-                ),
+                    "booking_deposit": (
+                        configuration.booking_deposit
+                    ),
 
-                "working_days": (
-                    configuration.working_days
-                ),
+                    "opening_time": (
+                        configuration.opening_time
+                    ),
 
-                "location": (
-                    configuration.location
-                ),
+                    "closing_time": (
+                        configuration.closing_time
+                    ),
 
-                "contact_phone": (
-                    configuration.contact_phone
-                ),
+                    "working_days": (
+                        configuration.working_days
+                    ),
 
-                "contact_email": (
-                    configuration.contact_email
-                ),
+                    "location": (
+                        configuration.location
+                    ),
 
-                "booking_length_minutes": (
-                    configuration.booking_length_minutes
-                ),
+                    "contact_phone": (
+                        configuration.contact_phone
+                    ),
+
+                    "contact_email": (
+                        configuration.contact_email
+                    ),
+
+                    "booking_length_minutes": (
+                        configuration.booking_length_minutes
+                    ),
+
+                    "is_complete": (
+                        configuration.is_complete
+                    ),
+                    "number_of_resources": (
+                        configuration.number_of_resources
+                    ),
+                },
             },
-        })
+            status=status.HTTP_200_OK,
+        )
+
 
 class AIConfirmSetupView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
 
+        # -----------------------------
+        # 1. Get conversation ID
+        # -----------------------------
+
         conversation_id = request.data.get(
             "conversation_id"
         )
 
         if not conversation_id:
+
             return Response(
                 {
-                    "error": "conversation_id is required."
+                    "error": (
+                        "conversation_id is required."
+                    )
                 },
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Get the owner's conversation
+        # -----------------------------
+        # 2. Get owner's conversation
+        # -----------------------------
+
         conversation = AIConversation.objects.filter(
             id=conversation_id,
             owner=request.user,
         ).first()
 
         if not conversation:
+
             return Response(
                 {
                     "error": "Conversation not found."
                 },
-                status=404,
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Get business configuration
+        # -----------------------------
+        # 3. Get configuration
+        # -----------------------------
+
         try:
+
             configuration = (
                 conversation.configuration
             )
+
         except BusinessConfiguration.DoesNotExist:
+
             return Response(
                 {
                     "error": (
@@ -204,62 +275,74 @@ class AIConfirmSetupView(APIView):
                         "does not exist."
                     )
                 },
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Make sure required information exists
+        # -----------------------------
+        # 4. Validate required information
+        # -----------------------------
+
         if not configuration.business_name:
+
             return Response(
                 {
                     "error": (
                         "Business name is missing."
                     )
                 },
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not configuration.business_type:
+
             return Response(
                 {
                     "error": (
                         "Business type is missing."
                     )
                 },
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Get services from the latest AI message
-        messages = conversation.messages.filter(
-            role="user"
-        ).order_by("-created_at")
+        if not configuration.services:
 
-        if not messages.exists():
             return Response(
                 {
                     "error": (
-                        "No business information found."
+                        "At least one service "
+                        "is required."
                     )
                 },
-                status=400,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # For now, we'll extract the latest
-        # business information again.
-        latest_message = messages.first()
+        # -----------------------------
+        # 5. Create actual platform
+        # -----------------------------
 
-        business_info = extract_business_info(
-            latest_message.content
-        )
+        try:
 
-        # Create the actual booking platform
-        tenant = create_business_from_configuration(
-            configuration,
-            request.user,
-            business_info.services,
-        )
+            tenant = create_business_from_configuration(
+                configuration,
+                request.user,
+                configuration.services,
+            )
 
-        # Mark configuration as complete
+        except ValueError as e:
+
+            return Response(
+                {
+                    "error": str(e)
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # -----------------------------
+        # 6. Mark configuration complete
+        # -----------------------------
+
         configuration.is_complete = True
+
         configuration.save(
             update_fields=[
                 "is_complete",
@@ -267,13 +350,71 @@ class AIConfirmSetupView(APIView):
             ]
         )
 
+        # -----------------------------
+        # 7. Return result
+        # -----------------------------
+
         return Response(
             {
                 "message": (
-                    "Business setup completed successfully."
+                    "Business setup completed "
+                    "successfully."
                 ),
+
                 "tenant_id": tenant.id,
-                "business_name": tenant.business_name,
+
+                "business_name": (
+                    tenant.business_name
+                ),
+
                 "slug": tenant.slug,
-            }
+            },
+            status=status.HTTP_201_CREATED,
         )
+
+
+# --------------------------------------------------
+# FUTURE CUSTOMER AI BOOKING ENDPOINT
+# --------------------------------------------------
+
+class AIBookingView(APIView):
+
+    def post(self, request):
+
+        message = request.data.get("message")
+
+        if not message:
+
+            return Response(
+                {
+                    "error": "Message is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+
+            result = process_booking_request(
+                message
+            )
+
+            if not result["success"]:
+
+                return Response(
+                    result,
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            return Response(
+                result,
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+
+            return Response(
+                {
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

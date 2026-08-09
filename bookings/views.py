@@ -1,15 +1,22 @@
-from rest_framework import generics
+from datetime import datetime, timedelta
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .utils import has_booking_conflict
 from tenants.models import Tenant
+from services.models import Resource
 from .models import Booking
 from .serializers import BookingSerializer
-from rest_framework.response import Response
-from rest_framework import status
-from datetime import datetime, timedelta
 
 from availability.models import BusinessHours
+
+
 class BookingCreateView(generics.CreateAPIView):
+
     serializer_class = BookingSerializer
 
     def get_tenant(self):
@@ -20,26 +27,39 @@ class BookingCreateView(generics.CreateAPIView):
         )
 
     def get_serializer_context(self):
+
         context = super().get_serializer_context()
+
         context["tenant"] = self.get_tenant()
+
         return context
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.get_tenant())
+
+        serializer.save(
+            tenant=self.get_tenant()
+        )
+
 
 class BookingListView(generics.ListAPIView):
-    serializer_class = BookingSerializer
+
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
         queryset = Booking.objects.filter(
             tenant__owner=self.request.user
+        ).select_related(
+            "service",
+            "resource",
+            "tenant",
         )
 
         booking_date = self.request.query_params.get("date")
         customer = self.request.query_params.get("customer")
         service = self.request.query_params.get("service")
         booking_status = self.request.query_params.get("status")
+        resource = self.request.query_params.get("resource")
 
         if booking_date:
             queryset = queryset.filter(
@@ -61,32 +81,102 @@ class BookingListView(generics.ListAPIView):
                 status=booking_status.upper()
             )
 
-        return queryset
+        if resource:
+            queryset = queryset.filter(
+                resource_id=resource
+            )
+
+        return queryset.order_by(
+            "booking_date",
+            "booking_time"
+        )
+
+    def list(self, request, *args, **kwargs):
+
+        queryset = self.filter_queryset(
+            self.get_queryset()
+        )
+
+        data = []
+
+        for booking in queryset:
+
+            data.append({
+                "id": booking.id,
+
+                "customer_name":
+                    booking.customer_name,
+
+                "customer_phone":
+                    booking.customer_phone,
+
+                "booking_date":
+                    booking.booking_date,
+
+                "booking_time":
+                    booking.booking_time,
+
+                "service": {
+                    "id": booking.service.id,
+                    "name": booking.service.name,
+                    "price": float(
+                        booking.service.price
+                    ),
+                    "duration": booking.service.duration,
+                },
+
+                "resource": (
+                    {
+                        "id": booking.resource.id,
+                        "name": booking.resource.name,
+                    }
+                    if booking.resource
+                    else None
+                ),
+
+                "status": booking.status,
+
+                "created_at":
+                    booking.created_at,
+            })
+
+        return Response({
+            "count": len(data),
+            "results": data,
+        })
+
 
 class BookingDeleteView(generics.DestroyAPIView):
+
     permission_classes = [IsAuthenticated]
 
     queryset = Booking.objects.all()
 
     def get_queryset(self):
+
         return Booking.objects.filter(
             tenant__owner=self.request.user
         )
 
 
 class BookingStatusUpdateView(generics.UpdateAPIView):
+
     serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
         return Booking.objects.filter(
             tenant__owner=self.request.user
         )
 
     def update(self, request, *args, **kwargs):
+
         booking = self.get_object()
 
-        new_status = request.data.get("status")
+        new_status = request.data.get(
+            "status"
+        )
 
         allowed_statuses = [
             "PENDING",
@@ -96,6 +186,7 @@ class BookingStatusUpdateView(generics.UpdateAPIView):
         ]
 
         if new_status not in allowed_statuses:
+
             return Response(
                 {
                     "error": "Invalid booking status."
@@ -104,7 +195,10 @@ class BookingStatusUpdateView(generics.UpdateAPIView):
             )
 
         booking.status = new_status
-        booking.save()
+
+        booking.save(
+            update_fields=["status"]
+        )
 
         return Response(
             BookingSerializer(booking).data
@@ -115,6 +209,7 @@ class AvailableSlotsView(generics.ListAPIView):
     permission_classes = []
 
     def get(self, request, slug):
+
         tenant = get_object_or_404(
             Tenant,
             slug=slug,
@@ -136,13 +231,18 @@ class AvailableSlotsView(generics.ListAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Convert date string to date
+        # --------------------------------
+        # 1. Convert date
+        # --------------------------------
+
         try:
             selected_date = datetime.strptime(
                 date_string,
                 "%Y-%m-%d"
             ).date()
+
         except ValueError:
+
             return Response(
                 {
                     "error": "Invalid date format. Use YYYY-MM-DD."
@@ -150,7 +250,10 @@ class AvailableSlotsView(generics.ListAPIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Find business hours for this day
+        # --------------------------------
+        # 2. Get business hours
+        # --------------------------------
+
         day_of_week = selected_date.weekday()
 
         business_hours = BusinessHours.objects.filter(
@@ -160,25 +263,43 @@ class AvailableSlotsView(generics.ListAPIView):
         ).first()
 
         if not business_hours:
+
             return Response({
                 "date": date_string,
                 "available_slots": []
             })
 
-        # Get requested service
+        # --------------------------------
+        # 3. Get service
+        # --------------------------------
+
         service = get_object_or_404(
             tenant.services,
             id=service_id,
             is_active=True
         )
 
-        # Existing non-cancelled bookings
-        bookings = Booking.objects.filter(
-            tenant=tenant,
-            booking_date=selected_date
-        ).exclude(
-            status="CANCELLED"
+        # --------------------------------
+        # 4. Get active resources
+        # --------------------------------
+
+        resources = Resource.objects.filter(
+            service=service,
+            is_active=True
         )
+
+        if not resources.exists():
+
+            return Response(
+                {
+                    "error": "No resources are available for this service."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # --------------------------------
+        # 5. Generate slots
+        # --------------------------------
 
         slots = []
 
@@ -198,48 +319,42 @@ class AvailableSlotsView(generics.ListAPIView):
             <= closing_time
         ):
 
-            new_start = current_time
+            slot_is_available = False
 
-            new_end = (
-                current_time
-                + timedelta(minutes=service.duration)
-            )
+            # --------------------------------
+            # Check every resource
+            # --------------------------------
 
-            # Assume slot is available
-            is_available = True
+            for resource in resources:
 
-            # Check overlap with existing bookings
-            for booking in bookings:
-
-                existing_start = datetime.combine(
-                    booking.booking_date,
-                    booking.booking_time
-                )
-
-                existing_end = (
-                    existing_start
-                    + timedelta(
-                        minutes=booking.service.duration
-                    )
-                )
-
-                # Overlap condition
-                if (
-                    new_start < existing_end
-                    and new_end > existing_start
+                if not has_booking_conflict(
+                    resource,
+                    selected_date,
+                    current_time.time(),
+                    service.duration
                 ):
-                    is_available = False
+
+                    slot_is_available = True
                     break
 
-            if is_available:
+            # --------------------------------
+            # Add slot if at least one resource
+            # is available
+            # --------------------------------
+
+            if slot_is_available:
+
                 slots.append(
                     current_time.strftime("%H:%M")
                 )
 
-            # Move to next possible slot
             current_time += timedelta(
                 minutes=service.duration
             )
+
+        # --------------------------------
+        # 6. Response
+        # --------------------------------
 
         return Response({
             "date": date_string,
@@ -247,26 +362,46 @@ class AvailableSlotsView(generics.ListAPIView):
             "duration": service.duration,
             "available_slots": slots
         })
+class PublicBookingDetailView(
+    generics.RetrieveAPIView
+):
 
-class PublicBookingDetailView(generics.RetrieveAPIView):
     permission_classes = []
 
     def get(self, request, slug, pk):
+
+        # --------------------------------
+        # Get tenant
+        # --------------------------------
+
         tenant = get_object_or_404(
             Tenant,
             slug=slug,
             is_active=True
         )
 
-        phone = request.query_params.get("phone")
+        # --------------------------------
+        # Get customer phone
+        # --------------------------------
+
+        phone = request.query_params.get(
+            "phone"
+        )
 
         if not phone:
+
             return Response(
                 {
-                    "error": "Phone number is required."
+                    "error": (
+                        "Phone number is required."
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # --------------------------------
+        # Find booking
+        # --------------------------------
 
         booking = get_object_or_404(
             Booking,
@@ -275,13 +410,79 @@ class PublicBookingDetailView(generics.RetrieveAPIView):
             customer_phone=phone
         )
 
+        # --------------------------------
+        # Response
+        # --------------------------------
+
+        return Response(
+            {
+                "booking_id": booking.id,
+                "business": tenant.business_name,
+                "customer_name": booking.customer_name,
+                "customer_phone": booking.customer_phone,
+                "service": booking.service.name,
+                "resource": (
+                    booking.resource.name
+                    if booking.resource
+                    else None
+                ),
+                "date": booking.booking_date,
+                "time": booking.booking_time,
+                "status": booking.status,
+            }
+        )
+
+class DashboardSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        bookings = Booking.objects.filter(
+            tenant__owner=request.user
+        )
+
+        today = datetime.today().date()
+
+        today_bookings = bookings.filter(
+            booking_date=today
+        )
+
+        pending = bookings.filter(
+            status="PENDING"
+        )
+
+        confirmed = bookings.filter(
+            status="CONFIRMED"
+        )
+
+        completed = bookings.filter(
+            status="COMPLETED"
+        )
+
+        cancelled = bookings.filter(
+            status="CANCELLED"
+        )
+
+        # Revenue from confirmed/completed bookings
+        revenue = 0
+
+        for booking in bookings.filter(
+            status__in=["CONFIRMED", "COMPLETED"]
+        ):
+            revenue += booking.service.price
+
         return Response({
-            "booking_id": booking.id,
-            "business": tenant.business_name,
-            "customer_name": booking.customer_name,
-            "customer_phone": booking.customer_phone,
-            "service": booking.service.name,
-            "date": booking.booking_date,
-            "time": booking.booking_time,
-            "status": booking.status,
+            "total_bookings": bookings.count(),
+
+            "today_bookings": today_bookings.count(),
+
+            "pending_bookings": pending.count(),
+
+            "confirmed_bookings": confirmed.count(),
+
+            "completed_bookings": completed.count(),
+
+            "cancelled_bookings": cancelled.count(),
+
+            "total_revenue": revenue,
         })
