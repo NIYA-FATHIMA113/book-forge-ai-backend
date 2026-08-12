@@ -1,10 +1,10 @@
 from django.urls import path
-from .views import DashboardView
+from .views import RecentBookingsView
 
 urlpatterns = [
     path(
-        "dashboard/",
-        DashboardView.as_view(),
-        name="dashboard",
+        "recent-bookings/",
+        RecentBookingsView.as_view(),
+        name="recent-bookings",
     ),
 ]
