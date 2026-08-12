@@ -1,10 +1,23 @@
 from django.urls import path
-from .views import AvailableSlotsView
+
+from .views import (
+    BusinessHoursListCreateView,
+    BusinessHoursDetailView,
+)
+
 
 urlpatterns = [
+
     path(
-        "book/<slug:slug>/available-slots/",
-        AvailableSlotsView.as_view(),
-        name="available-slots",
+        "tenants/<int:tenant_id>/business-hours/",
+        BusinessHoursListCreateView.as_view(),
+        name="business-hours-list-create",
     ),
+
+    path(
+        "business-hours/<int:pk>/",
+        BusinessHoursDetailView.as_view(),
+        name="business-hours-detail",
+    ),
+
 ]

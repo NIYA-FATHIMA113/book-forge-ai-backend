@@ -18,24 +18,74 @@ class Tenant(models.Model):
         related_name="tenants"
     )
 
-    business_name = models.CharField(max_length=255)
+    business_name = models.CharField(
+        max_length=255
+    )
 
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(
+        unique=True
+    )
 
     business_type = models.CharField(
         max_length=30,
         choices=BUSINESS_TYPES
     )
 
-    is_active = models.BooleanField(default=True)
+    # -----------------------------
+    # Business contact information
+    # -----------------------------
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    location = models.CharField(
+        max_length=255,
+        blank=True
+    )
 
-    updated_at = models.DateTimeField(auto_now=True)
+    contact_phone = models.CharField(
+        max_length=15,
+        blank=True
+    )
+
+    contact_email = models.EmailField(
+        blank=True
+    )
+
+    # -----------------------------
+    # Booking configuration
+    # -----------------------------
+
+    booking_length_minutes = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
+    booking_deposit = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    # -----------------------------
+    # Business state
+    # -----------------------------
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
 
     def save(self, *args, **kwargs):
+
         if not self.slug:
             self.slug = slugify(self.business_name)
+
         super().save(*args, **kwargs)
 
     def __str__(self):
