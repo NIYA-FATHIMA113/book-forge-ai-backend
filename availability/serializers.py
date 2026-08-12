@@ -39,6 +39,11 @@ class BusinessHoursSerializer(serializers.ModelSerializer):
 
         if not is_closed:
 
+            if opening_time is None or closing_time is None:
+                raise serializers.ValidationError(
+                    "Opening time and closing time are required."
+                )
+
             if opening_time >= closing_time:
                 raise serializers.ValidationError(
                     "Closing time must be after opening time."

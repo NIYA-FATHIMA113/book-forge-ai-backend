@@ -13,6 +13,7 @@ from availability.models import BusinessHours
 BUSINESS_TYPE_MAPPING = {
     "football turf": "sports_turf",
     "sports turf": "sports_turf",
+    "turf": "sports_turf",
 }
 
 
