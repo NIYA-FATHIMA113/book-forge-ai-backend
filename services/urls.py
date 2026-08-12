@@ -3,6 +3,8 @@ from .views import (
     ServiceListCreateView,
     ServiceDetailView,
     PublicServiceListView,
+    ResourceListCreateView,
+    ResourceDetailView,
 )
 
 urlpatterns = [
@@ -22,5 +24,16 @@ urlpatterns = [
         "book/<slug:slug>/services/",
         PublicServiceListView.as_view(),
         name="public-service-list",
+    ),
+    path(
+        "services/<int:service_id>/resources/",
+        ResourceListCreateView.as_view(),
+        name="resource-list-create",
+    ),
+
+    path(
+        "resources/<int:pk>/",
+        ResourceDetailView.as_view(),
+        name="resource-detail",
     ),
 ]

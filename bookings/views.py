@@ -160,50 +160,47 @@ class BookingDeleteView(generics.DestroyAPIView):
 
 
 class BookingStatusUpdateView(generics.UpdateAPIView):
-
     serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-
         return Booking.objects.filter(
             tenant__owner=self.request.user
         )
 
     def update(self, request, *args, **kwargs):
-
         booking = self.get_object()
 
-        new_status = request.data.get(
-            "status"
-        )
+        new_status = request.data.get("status")
 
-        allowed_statuses = [
-            "PENDING",
-            "CONFIRMED",
-            "COMPLETED",
-            "CANCELLED",
-        ]
+        allowed_transitions = {
+            "PENDING": ["CONFIRMED", "CANCELLED"],
+            "CONFIRMED": ["COMPLETED", "CANCELLED"],
+            "COMPLETED": [],
+            "CANCELLED": [],
+        }
 
-        if new_status not in allowed_statuses:
+        current_status = booking.status
 
+        if new_status not in allowed_transitions.get(
+            current_status, []
+        ):
             return Response(
                 {
-                    "error": "Invalid booking status."
+                    "error": (
+                        f"Cannot change booking status "
+                        f"from {current_status} to {new_status}."
+                    )
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         booking.status = new_status
-
-        booking.save(
-            update_fields=["status"]
-        )
+        booking.save(update_fields=["status"])
 
         return Response(
             BookingSerializer(booking).data
         )
-
 
 class AvailableSlotsView(generics.ListAPIView):
     permission_classes = []

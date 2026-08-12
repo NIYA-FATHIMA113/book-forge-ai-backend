@@ -1,12 +1,11 @@
 from django.shortcuts import get_object_or_404
 
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from tenants.models import Tenant
-from .models import Service
-from .serializers import ServiceSerializer
-from rest_framework.permissions import AllowAny
+from .models import Service, Resource
+from .serializers import ServiceSerializer, ResourceSerializer
 
 class ServiceListCreateView(generics.ListCreateAPIView):
     serializer_class = ServiceSerializer
@@ -47,4 +46,34 @@ class PublicServiceListView(generics.ListAPIView):
             tenant__slug=self.kwargs["slug"],
             tenant__is_active=True,
             is_active=True,
+        )
+class ResourceListCreateView(generics.ListCreateAPIView):
+    serializer_class = ResourceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_service(self):
+        return get_object_or_404(
+            Service,
+            id=self.kwargs["service_id"],
+            tenant__owner=self.request.user,
+        )
+
+    def get_queryset(self):
+        return Resource.objects.filter(
+            service=self.get_service()
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(
+            service=self.get_service()
+        )
+
+
+class ResourceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ResourceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Resource.objects.filter(
+            service__tenant__owner=self.request.user
         )
