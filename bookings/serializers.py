@@ -1,5 +1,5 @@
 
-
+from datetime import date, timedelta
 from rest_framework import serializers
 
 from .models import Booking
@@ -10,6 +10,8 @@ from .utils import (
 )
 
 from services.models import Resource
+
+from datetime import date, datetime
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -45,7 +47,41 @@ class BookingSerializer(serializers.ModelSerializer):
         booking_date = attrs["booking_date"]
 
         booking_time = attrs["booking_time"]
+        # --------------------------------
+        # Booking date cannot be in the past
+        # --------------------------------
+        if booking_date < date.today():
+            raise serializers.ValidationError(
+                "Booking date cannot be in the past."
+            )
+        # --------------------------------
+        # Booking cannot be more than
+        # 30 days in advance
+        # --------------------------------
 
+        max_booking_date = date.today() + timedelta(days=30)
+
+        if booking_date > max_booking_date:
+            raise serializers.ValidationError(
+                "Bookings can only be made up to 30 days in advance."
+            )
+        # --------------------------------
+        # Booking time cannot be in the past
+        # when booking for today
+        # --------------------------------
+
+        if booking_date == date.today():
+
+            current_time = datetime.now().time()
+
+            if booking_time <= current_time:
+                raise serializers.ValidationError(
+                    "Booking time has already passed."
+                )
+        if booking_date < date.today():
+            raise serializers.ValidationError(
+                "Booking date cannot be in the past."
+            )
         # --------------------------------
         # 1. Check service belongs to tenant
         # --------------------------------
