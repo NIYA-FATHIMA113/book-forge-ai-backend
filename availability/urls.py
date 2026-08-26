@@ -5,19 +5,16 @@ from .views import (
     BusinessHoursDetailView,
 )
 
-
 urlpatterns = [
-
     path(
-        "tenants/<int:tenant_id>/business-hours/",
+        "tenants/<int:tenant_id>/hours/",
         BusinessHoursListCreateView.as_view(),
         name="business-hours-list-create",
     ),
 
     path(
-        "business-hours/<int:pk>/",
+        "hours/<int:pk>/",
         BusinessHoursDetailView.as_view(),
         name="business-hours-detail",
     ),
-
 ]

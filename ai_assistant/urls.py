@@ -3,6 +3,7 @@ from .views import (
     AIChatView,
     AIConfirmSetupView,
     AIBookingView,
+    
 )
 
 urlpatterns = [
@@ -22,4 +23,5 @@ urlpatterns = [
         AIBookingView.as_view(),
         name="ai-booking",
     ),
+    
 ]

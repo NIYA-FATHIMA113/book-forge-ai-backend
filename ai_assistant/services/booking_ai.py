@@ -10,7 +10,7 @@ from bookings.models import Booking
 from tenants.models import Tenant
 from services.models import Service
 
-from ai_assistant.services.gemini import extract_booking_request
+from ai_assistant.services.ai_provider import extract_booking_request
 from ai_assistant.services.mock_booking_ai import mock_booking_request
 from ai_assistant.services.date_resolver import resolve_booking_date
 

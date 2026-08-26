@@ -82,6 +82,9 @@ class BusinessInfo(BaseModel):
         doctors, courts, tables, or similar resources.
         """
     )
+
+
+
 class BookingRequest(BaseModel):
     business_name: Optional[str] = Field(
         default=None,

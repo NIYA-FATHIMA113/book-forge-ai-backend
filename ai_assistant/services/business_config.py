@@ -1,8 +1,28 @@
 from datetime import datetime
 
 from ai_assistant.models import BusinessConfiguration
+from datetime import datetime
 
 
+def parse_time_value(value):
+    if not value:
+        return None
+
+    value = str(value).strip()
+
+    formats = [
+        "%H:%M",
+        "%I:%M %p",
+        "%I %p",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+
+    return None
 def update_business_configuration(
     conversation,
     business_info,
@@ -29,10 +49,9 @@ def update_business_configuration(
         )
 
     if business_info.opening_time:
-        configuration.opening_time = datetime.strptime(
-            business_info.opening_time,
-            "%H:%M"
-        ).time()
+        configuration.opening_time = parse_time_value(
+            business_info.opening_time
+        )
 
     if business_info.closing_time:
         configuration.closing_time = datetime.strptime(
@@ -77,6 +96,7 @@ def update_business_configuration(
             }
             for service in business_info.services
         ]
+    configuration.is_complete = configuration.check_completion()
     configuration.save()
 
     return configuration

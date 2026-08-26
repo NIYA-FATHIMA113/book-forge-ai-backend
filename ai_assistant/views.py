@@ -2,16 +2,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-
+from drf_spectacular.utils import extend_schema
 from .models import (
     AIConversation,
     AIMessage,
     BusinessConfiguration,
 )
+from .services.configuration_validator import (
+    validate_business_configuration,
+)
 
 from .serializers import AIChatSerializer
 
-from .services.gemini import (
+from .services.ai_provider import (
     generate_ai_response,
     extract_business_info,
 )
@@ -28,7 +31,9 @@ from .services.business_setup import (
 # customer-facing AI booking endpoint as a future feature.
 from .services.booking_ai import process_booking_request
 
-
+@extend_schema(
+    request=AIChatSerializer,
+)
 class AIChatView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -146,6 +151,9 @@ class AIChatView(APIView):
             conversation,
             business_info,
         )
+        validation = validate_business_configuration(
+            configuration
+        )
 
         # -----------------------------
         # 9. Return response
@@ -205,9 +213,16 @@ class AIChatView(APIView):
                     "is_complete": (
                         configuration.is_complete
                     ),
+                    "missing_fields": (
+                        configuration.get_missing_fields()
+                    ),
                     "number_of_resources": (
                         configuration.number_of_resources
                     ),
+                    "configuration_status": {
+                        "is_complete": validation["is_complete"],
+                        "missing_fields": validation["missing_fields"],
+                    },
                 },
             },
             status=status.HTTP_200_OK,
@@ -228,7 +243,6 @@ class AIConfirmSetupView(APIView):
         )
 
         if not conversation_id:
-
             return Response(
                 {
                     "error": (
@@ -248,7 +262,6 @@ class AIConfirmSetupView(APIView):
         ).first()
 
         if not conversation:
-
             return Response(
                 {
                     "error": "Conversation not found."
@@ -261,13 +274,11 @@ class AIConfirmSetupView(APIView):
         # -----------------------------
 
         try:
-
             configuration = (
                 conversation.configuration
             )
 
         except BusinessConfiguration.DoesNotExist:
-
             return Response(
                 {
                     "error": (
@@ -282,35 +293,54 @@ class AIConfirmSetupView(APIView):
         # 4. Validate required information
         # -----------------------------
 
-        if not configuration.business_name:
+        if not configuration.check_completion():
 
             return Response(
                 {
+                    "error": "Business setup is incomplete.",
+                    "missing_fields": (
+                        configuration.get_missing_fields()
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not configuration.opening_time:
+            return Response(
+                {
                     "error": (
-                        "Business name is missing."
+                        "Opening time is missing."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not configuration.business_type:
-
+        if not configuration.closing_time:
             return Response(
                 {
                     "error": (
-                        "Business type is missing."
+                        "Closing time is missing."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not configuration.services:
-
+        if not configuration.working_days:
             return Response(
                 {
                     "error": (
-                        "At least one service "
-                        "is required."
+                        "Working days are missing."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not configuration.number_of_resources:
+            return Response(
+                {
+                    "error": (
+                        "Number of resources "
+                        "is missing."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -321,7 +351,6 @@ class AIConfirmSetupView(APIView):
         # -----------------------------
 
         try:
-
             tenant = create_business_from_configuration(
                 configuration,
                 request.user,
@@ -329,7 +358,6 @@ class AIConfirmSetupView(APIView):
             )
 
         except ValueError as e:
-
             return Response(
                 {
                     "error": str(e)
@@ -360,19 +388,12 @@ class AIConfirmSetupView(APIView):
                     "Business setup completed "
                     "successfully."
                 ),
-
                 "tenant_id": tenant.id,
-
-                "business_name": (
-                    tenant.business_name
-                ),
-
+                "business_name": tenant.business_name,
                 "slug": tenant.slug,
             },
             status=status.HTTP_201_CREATED,
         )
-
-
 # --------------------------------------------------
 # FUTURE CUSTOMER AI BOOKING ENDPOINT
 # --------------------------------------------------

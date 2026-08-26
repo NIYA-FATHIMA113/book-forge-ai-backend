@@ -1,22 +1,33 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-from ai_assistant.services.gemini import generate_ai_response
+from django.test import SimpleTestCase, override_settings
 
 
-history = [
-    {
-        "role": "user",
-        "parts": [
+class GeminiIntegrationTest(SimpleTestCase):
+
+    @override_settings()
+    def test_gemini_connection(self):
+        if os.getenv("RUN_GEMINI_TESTS", "false").lower() != "true":
+            self.skipTest(
+                "Gemini integration tests are disabled."
+            )
+
+        from ai_assistant.services.ai_provider import generate_ai_response
+
+        history = [
             {
-                "text": "I run a football turf called Niya Turf."
+                "role": "user",
+                "parts": [
+                    {
+                        "text": (
+                            "I run a football turf "
+                            "called Niya Turf."
+                        )
+                    }
+                ],
             }
-        ],
-    }
-]
+        ]
 
-response = generate_ai_response(history)
+        response = generate_ai_response(history)
 
-print(response)
+        self.assertTrue(response)

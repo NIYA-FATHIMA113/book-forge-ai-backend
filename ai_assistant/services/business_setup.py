@@ -1,4 +1,3 @@
-
 from django.db import transaction
 
 from tenants.models import Tenant
@@ -42,7 +41,7 @@ def create_business_from_configuration(
     Convert confirmed AI business configuration
     into actual booking-system records.
 
-    Creates:
+    Creates/updates:
 
         Tenant
         Services
@@ -51,8 +50,14 @@ def create_business_from_configuration(
     """
 
     # --------------------------------
-    # 1. Validate business type
+    # 1. Validate business information
     # --------------------------------
+
+    if not configuration.business_name:
+        raise ValueError("Business name is required.")
+
+    if not configuration.business_type:
+        raise ValueError("Business type is required.")
 
     business_type = BUSINESS_TYPE_MAPPING.get(
         configuration.business_type.lower()
@@ -65,34 +70,58 @@ def create_business_from_configuration(
         )
 
     # --------------------------------
-    # 2. Create Tenant
+    # 2. Create / update Tenant
     # --------------------------------
 
-    tenant, created = Tenant.objects.get_or_create(
+    tenant, created = Tenant.objects.update_or_create(
         owner=owner,
         business_name=configuration.business_name,
         defaults={
             "business_type": business_type,
+            "location": configuration.location or "",
+            "contact_phone": configuration.contact_phone or "",
+            "contact_email": configuration.contact_email or "",
+            "booking_length_minutes": (
+                configuration.booking_length_minutes
+            ),
+            "booking_deposit": (
+                configuration.booking_deposit
+            ),
             "is_active": True,
         },
     )
 
     # --------------------------------
-    # 3. Create Services
+    # 3. Create / update Services
     # --------------------------------
 
     for service_data in services_data:
 
+        # BusinessConfiguration stores services
+        # as dictionaries.
+
+        service_name = service_data.get("name")
+
+        if not service_name:
+            continue
+
+        duration = (
+            service_data.get("duration_minutes")
+            or configuration.booking_length_minutes
+            or 60
+        )
+
+        price = service_data.get("price")
+
+        if price is None:
+            price = 0
+
         service, _ = Service.objects.update_or_create(
             tenant=tenant,
-            name=service_data.name,
+            name=service_name,
             defaults={
-                "duration": (
-                    service_data.duration_minutes
-                    or configuration.booking_length_minutes
-                    or 60
-                ),
-                "price": service_data.price or 0,
+                "duration": duration,
+                "price": price,
                 "is_active": True,
             },
         )
@@ -122,7 +151,10 @@ def create_business_from_configuration(
     # --------------------------------
     # 5. Create Business Hours
     # --------------------------------
-
+    print("AI WORKING DAYS:", configuration.working_days)
+    print("AI OPENING TIME:", configuration.opening_time)
+    print("AI CLOSING TIME:", configuration.closing_time)
+    
     working_days = (
         configuration.working_days
         or []
@@ -132,9 +164,15 @@ def create_business_from_configuration(
 
     for day_name in working_days:
 
-        day_number = DAY_MAPPING.get(
-            day_name
-        )
+        day_name = str(day_name).strip().lower()
+
+        day_number = None
+
+        for mapped_day, number in DAY_MAPPING.items():
+
+            if str(mapped_day).strip().lower() == day_name:
+                day_number = number
+                break
 
         if day_number is None:
             continue
@@ -145,39 +183,9 @@ def create_business_from_configuration(
             tenant=tenant,
             day_of_week=day_number,
             defaults={
-                "opening_time": (
-                    configuration.opening_time
-                ),
-                "closing_time": (
-                    configuration.closing_time
-                ),
+                "opening_time": configuration.opening_time,
+                "closing_time": configuration.closing_time,
                 "is_closed": False,
-            },
-        )
-
-    # --------------------------------
-    # 6. Create Closed Days
-    # --------------------------------
-
-    all_days = set(
-        DAY_MAPPING.values()
-    )
-
-    closed_days = all_days - open_days
-
-    for day_number in closed_days:
-
-        BusinessHours.objects.update_or_create(
-            tenant=tenant,
-            day_of_week=day_number,
-            defaults={
-                "opening_time": (
-                    configuration.opening_time
-                ),
-                "closing_time": (
-                    configuration.closing_time
-                ),
-                "is_closed": True,
             },
         )
 
@@ -186,4 +194,3 @@ def create_business_from_configuration(
     # --------------------------------
 
     return tenant
-

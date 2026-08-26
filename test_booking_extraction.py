@@ -1,4 +1,4 @@
-from ai_assistant.services.gemini import extract_booking_request
+from ai_assistant.services.ai_provider import extract_booking_request
 
 
 text = """

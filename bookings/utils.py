@@ -24,7 +24,7 @@ def get_business_hours(tenant, booking_date):
 def is_within_business_hours(
     business_hours,
     booking_time,
-    duration
+    duration,
 ):
     """
     Returns True if the booking starts and ends
@@ -32,7 +32,7 @@ def is_within_business_hours(
     """
 
     booking_start = datetime.combine(
-        datetime.today(),
+        datetime.min,
         booking_time
     )
 
@@ -42,20 +42,19 @@ def is_within_business_hours(
     )
 
     opening = datetime.combine(
-        datetime.today(),
+        datetime.min,
         business_hours.opening_time
     )
 
     closing = datetime.combine(
-        datetime.today(),
+        datetime.min,
         business_hours.closing_time
     )
 
     return (
-        booking_start >= opening and
-        booking_end <= closing
+        booking_start >= opening
+        and booking_end <= closing
     )
-
 
 
 def has_booking_conflict(

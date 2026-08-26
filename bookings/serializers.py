@@ -55,7 +55,7 @@ class BookingSerializer(serializers.ModelSerializer):
                 "Booking date cannot be in the past."
             )
         # --------------------------------
-        # Booking cannot be more than
+        # Booking cannot be more thanxxxxxxxxxxxxxxzzzzz
         # 30 days in advance
         # --------------------------------
 
@@ -90,6 +90,10 @@ class BookingSerializer(serializers.ModelSerializer):
 
             raise serializers.ValidationError(
                 "Invalid service selected."
+            )
+        if not service.is_active:
+            raise serializers.ValidationError(
+                "This service is currently unavailable."
             )
 
         # --------------------------------

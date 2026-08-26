@@ -128,6 +128,43 @@ class BusinessConfiguration(models.Model):
     updated_at = models.DateTimeField(
         auto_now=True,
     )
+    def check_completion(self):
+        required_fields = [
+            self.business_name,
+            self.business_type,
+            self.services,
+            self.opening_time,
+            self.closing_time,
+            self.working_days,
+            self.number_of_resources,
+        ]
 
+        return all(required_fields)
+
+    def get_missing_fields(self):
+        missing = []
+
+        if not self.business_name:
+            missing.append("business_name")
+
+        if not self.business_type:
+            missing.append("business_type")
+
+        if not self.services:
+            missing.append("services")
+
+        if not self.opening_time:
+            missing.append("opening_time")
+
+        if not self.closing_time:
+            missing.append("closing_time")
+
+        if not self.working_days:
+            missing.append("working_days")
+
+        if not self.number_of_resources:
+            missing.append("number_of_resources")
+
+        return missing
     def __str__(self):
         return self.business_name or "Business Configuration"

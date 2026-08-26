@@ -29,3 +29,19 @@ class TenantSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate_booking_length_minutes(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError(
+                "Booking length must be greater than 0."
+            )
+
+        return value
+
+    def validate_booking_deposit(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "Booking deposit cannot be negative."
+            )
+
+        return value
