@@ -9,8 +9,6 @@ from .utils import (
     has_booking_conflict,
 )
 
-from services.models import Resource
-
 from datetime import date, datetime
 
 
@@ -55,8 +53,7 @@ class BookingSerializer(serializers.ModelSerializer):
                 "Booking date cannot be in the past."
             )
         # --------------------------------
-        # Booking cannot be more thanxxxxxxxxxxxxxxzzzzz
-        # 30 days in advance
+        # Booking cannot be more than 30 days in advance.
         # --------------------------------
 
         max_booking_date = date.today() + timedelta(days=30)
@@ -78,10 +75,6 @@ class BookingSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Booking time has already passed."
                 )
-        if booking_date < date.today():
-            raise serializers.ValidationError(
-                "Booking date cannot be in the past."
-            )
         # --------------------------------
         # 1. Check service belongs to tenant
         # --------------------------------
@@ -135,10 +128,7 @@ class BookingSerializer(serializers.ModelSerializer):
         # 4. Get active resources
         # --------------------------------
 
-        resources = Resource.objects.filter(
-            service=service,
-            is_active=True
-        )
+        resources = tenant.resources.filter(is_active=True)
 
         if not resources.exists():
 

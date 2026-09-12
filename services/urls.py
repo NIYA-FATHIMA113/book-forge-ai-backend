@@ -26,9 +26,17 @@ urlpatterns = [
         name="public-service-list",
     ),
     path(
-        "services/<int:service_id>/resources/",
+        "tenants/<int:tenant_id>/resources/",
         ResourceListCreateView.as_view(),
         name="resource-list-create",
+    ),
+
+    # Backwards-compatible alias. Resources returned here belong to the
+    # service's tenant, never to the service itself.
+    path(
+        "services/<int:service_id>/resources/",
+        ResourceListCreateView.as_view(),
+        name="service-resource-list-create",
     ),
 
     path(

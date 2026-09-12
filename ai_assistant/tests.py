@@ -179,7 +179,18 @@ class AIProviderTests(TestCase):
 		self.assertEqual(tenant.business_name, "Hightown Turf")
 		self.assertEqual(tenant.business_type, "sports_turf")
 		self.assertEqual(Service.objects.filter(tenant=tenant).count(), 4)
-		self.assertEqual(Resource.objects.filter(service__tenant=tenant).count(), 8)
+		self.assertEqual(Resource.objects.filter(tenant=tenant).count(), 2)
+		self.assertEqual(
+			list(Resource.objects.filter(tenant=tenant).values_list("name", flat=True)),
+			["Resource 1", "Resource 2"],
+		)
+
+		create_business_from_configuration(
+			configuration,
+			user,
+			configuration.services,
+		)
+		self.assertEqual(Resource.objects.filter(tenant=tenant).count(), 2)
 		self.assertEqual(BusinessHours.objects.filter(tenant=tenant).count(), 6)
 
 	def test_extract_time_range(self):

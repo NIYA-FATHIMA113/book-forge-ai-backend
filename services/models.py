@@ -32,8 +32,8 @@ class Service(models.Model):
 
 
 class Resource(models.Model):
-    service = models.ForeignKey(
-        Service,
+    tenant = models.ForeignKey(
+        Tenant,
         on_delete=models.CASCADE,
         related_name="resources"
     )
@@ -51,4 +51,4 @@ class Resource(models.Model):
     )
 
     def __str__(self):
-        return f"{self.name} - {self.service.name}"
+        return f"{self.name} - {self.tenant.business_name}"

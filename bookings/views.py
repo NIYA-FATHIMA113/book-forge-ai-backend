@@ -8,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from tenants.models import Tenant
-from services.models import Resource
 from availability.models import BusinessHours
 
 from .models import Booking
@@ -450,12 +449,7 @@ class AvailableSlotsView(generics.ListAPIView):
         # 6. Get active resources
         # --------------------------------
 
-        resources = Resource.objects.filter(
-
-            service=service,
-
-            is_active=True
-        )
+        resources = tenant.resources.filter(is_active=True)
 
         if not resources.exists():
 

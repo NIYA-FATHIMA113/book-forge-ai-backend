@@ -135,7 +135,7 @@ def create_business_from_configuration(
         if price is None:
             price = 0
 
-        service, _ = Service.objects.update_or_create(
+        Service.objects.update_or_create(
             tenant=tenant,
             name=service_name,
             defaults={
@@ -145,27 +145,18 @@ def create_business_from_configuration(
             },
         )
 
-        # --------------------------------
-        # 4. Create Resources
-        # --------------------------------
+    # --------------------------------
+    # 4. Create tenant-level Resources
+    # --------------------------------
 
-        number_of_resources = (
-            configuration.number_of_resources
-            or 1
+    number_of_resources = configuration.number_of_resources or 1
+
+    for resource_number in range(1, number_of_resources + 1):
+        Resource.objects.get_or_create(
+            tenant=tenant,
+            name=f"Resource {resource_number}",
+            defaults={"is_active": True},
         )
-
-        for resource_number in range(
-            1,
-            number_of_resources + 1,
-        ):
-
-            Resource.objects.get_or_create(
-                service=service,
-                name=f"Resource {resource_number}",
-                defaults={
-                    "is_active": True,
-                },
-            )
 
     # --------------------------------
     # 5. Create Business Hours

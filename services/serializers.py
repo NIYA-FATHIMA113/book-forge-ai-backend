@@ -29,7 +29,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
         fields = [
             "id",
-            "service",
+            "tenant",
             "name",
             "is_active",
             "created_at",
@@ -37,6 +37,6 @@ class ResourceSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             "id",
-            "service",
+            "tenant",
             "created_at",
         ]

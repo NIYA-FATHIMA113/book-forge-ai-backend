@@ -30,18 +30,17 @@ class ResourceAdmin(admin.ModelAdmin):
 
     list_display = (
         "name",
-        "service",
+        "tenant",
         "is_active",
         "created_at",
     )
 
     list_filter = (
         "is_active",
-        "service",
+        "tenant",
     )
 
     search_fields = (
         "name",
-        "service__name",
-        "service__tenant__business_name",
+        "tenant__business_name",
     )
