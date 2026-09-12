@@ -10,12 +10,31 @@ from availability.models import BusinessHours
 # --------------------------------
 
 BUSINESS_TYPE_MAPPING = {
+    # Turf aliases and the canonical normalized token.
     "football turf": "sports_turf",
+    "football_turf": "sports_turf",
     "sports turf": "sports_turf",
+    "sports_turf": "sports_turf",
     "turf": "sports_turf",
+    "football ground": "sports_turf",
+    "football pitch": "sports_turf",
+    "sports facility": "sports_turf",
+
+    # Salon
+    "salon": "salon",
+    "beauty salon": "salon",
+    "hair salon": "salon",
+
+    # Dental clinic
+    "dental clinic": "clinic",
+    "dentist": "clinic",
+    "dental": "clinic",
+
+    # Restaurant
+    "restaurant": "restaurant",
+    "cafe": "restaurant",
+    "coffee shop": "restaurant",
 }
-
-
 # --------------------------------
 # Day mapping
 # --------------------------------

@@ -150,8 +150,44 @@ class BusinessConfiguration(models.Model):
         if not self.business_type:
             missing.append("business_type")
 
-        if not self.services:
-            missing.append("services")
+        business_type = (
+            self.business_type.strip().lower()
+            if self.business_type
+            else ""
+        )
+
+        # --------------------------------
+        # Business-specific requirements
+        # --------------------------------
+
+        if business_type in ["salon", "clinic"]:
+            if not self.services:
+                missing.append("services")
+
+            if not self.number_of_resources:
+                missing.append("number_of_resources")
+
+        elif business_type == "sports_turf":
+            if not self.number_of_resources:
+                missing.append("number_of_resources")
+
+        elif business_type == "restaurant":
+            # Restaurants use tables/seating as resources.
+            # Services are NOT required.
+            if not self.number_of_resources:
+                missing.append("number_of_resources")
+
+        else:
+            # Unknown business type
+            if not self.services:
+                missing.append("services")
+
+            if not self.number_of_resources:
+                missing.append("number_of_resources")
+
+        # --------------------------------
+        # Common requirements
+        # --------------------------------
 
         if not self.opening_time:
             missing.append("opening_time")
@@ -162,8 +198,120 @@ class BusinessConfiguration(models.Model):
         if not self.working_days:
             missing.append("working_days")
 
+        return missing
+
+    def check_completion(self):
+        """
+        Determine whether the business configuration contains
+        the minimum information required for setup.
+        """
+
+        if not self.business_name:
+            return False
+
+        if not self.business_type:
+            return False
+
+        business_type = (
+            self.business_type.lower().strip()
+        )
+
+        # Common requirements
+        if not self.opening_time:
+            return False
+
+        if not self.closing_time:
+            return False
+
+        if not self.working_days:
+            return False
+
+        # Sports turf
+        if business_type in [
+            "football turf",
+            "sports turf",
+            "turf",
+            "sports_turf",
+        ]:
+
+            if not self.number_of_resources:
+                return False
+
+            return True
+
+        # Restaurant
+        if business_type in [
+            "restaurant",
+            "cafe",
+            "coffee shop",
+        ]:
+
+            return True
+
+        # Salon / clinic / normal service businesses
+        if not self.services:
+            return False
+
         if not self.number_of_resources:
-            missing.append("number_of_resources")
+            return False
+
+        return True
+
+
+    def get_missing_fields(self):
+
+        missing = []
+
+        if not self.business_name:
+            missing.append("business_name")
+
+        if not self.business_type:
+            missing.append("business_type")
+
+        business_type = (
+            self.business_type.lower().strip()
+            if self.business_type
+            else ""
+        )
+
+        if business_type in [
+            "football turf",
+            "sports turf",
+            "turf",
+            "sports_turf",
+        ]:
+
+            if not self.number_of_resources:
+                missing.append(
+                    "number_of_resources"
+                )
+
+        elif business_type in [
+            "restaurant",
+            "cafe",
+            "coffee shop",
+        ]:
+
+            pass
+
+        else:
+
+            if not self.services:
+                missing.append("services")
+
+            if not self.number_of_resources:
+                missing.append(
+                    "number_of_resources"
+                )
+
+        if not self.opening_time:
+            missing.append("opening_time")
+
+        if not self.closing_time:
+            missing.append("closing_time")
+
+        if not self.working_days:
+            missing.append("working_days")
 
         return missing
     def __str__(self):

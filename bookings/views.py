@@ -227,22 +227,30 @@ class BookingStatusUpdateView(generics.UpdateAPIView):
             new_status = new_status.upper()
 
         allowed_transitions = {
+                "PENDING": [
+                    "CONFIRMED",
+                    "COMPLETED",
+                    "CANCELLED",
+                ],
 
-            "PENDING": [
-                "CONFIRMED",
-                "CANCELLED"
-            ],
+                "CONFIRMED": [
+                    "PENDING",
+                    "COMPLETED",
+                    "CANCELLED",
+                ],
 
-            "CONFIRMED": [
-                "COMPLETED",
-                "CANCELLED"
-            ],
+                "COMPLETED": [
+                    "PENDING",
+                    "CONFIRMED",
+                    "CANCELLED",
+                ],
 
-            "COMPLETED": [],
-
-            "CANCELLED": [],
-        }
-
+                "CANCELLED": [
+                    "PENDING",
+                    "CONFIRMED",
+                    "COMPLETED",
+                ],
+            }
         current_status = booking.status
 
         if new_status not in allowed_transitions.get(

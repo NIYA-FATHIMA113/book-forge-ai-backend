@@ -15,7 +15,6 @@ class BusinessHoursListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_tenant(self):
-
         return get_object_or_404(
             Tenant,
             id=self.kwargs["tenant_id"],
@@ -23,17 +22,20 @@ class BusinessHoursListCreateView(generics.ListCreateAPIView):
         )
 
     def get_queryset(self):
-
         return BusinessHours.objects.filter(
             tenant=self.get_tenant()
-        )
+        ).order_by("day_of_week")
+
+    def paginate_queryset(self, queryset):
+        # Business hours always have only 7 days.
+        # Return all days instead of paginating them.
+        return None
 
     def perform_create(self, serializer):
 
         serializer.save(
             tenant=self.get_tenant()
         )
-
 
 class BusinessHoursDetailView(
     generics.RetrieveUpdateDestroyAPIView
