@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -30,6 +32,43 @@ from .services.business_setup import (
 # Keep this for now only if you still want the
 # customer-facing AI booking endpoint as a future feature.
 from .services.booking_ai import process_booking_request
+
+
+def validate_preview_services(value):
+    """Validate editable service rows submitted with setup confirmation."""
+    if not isinstance(value, list) or not value:
+        raise ValueError("Add at least one service before creating the business.")
+
+    normalized = []
+    names = set()
+    for service in value:
+        if not isinstance(service, dict):
+            raise ValueError("Each service must include a name, duration, and price.")
+
+        name = str(service.get("name", "")).strip()
+        if not name or len(name) > 100:
+            raise ValueError("Service names must be between 1 and 100 characters.")
+        if name.casefold() in names:
+            raise ValueError(f"The service '{name}' is listed more than once.")
+        names.add(name.casefold())
+
+        try:
+            duration = int(service.get("duration_minutes"))
+            price = Decimal(str(service.get("price", 0)))
+        except (TypeError, ValueError, InvalidOperation):
+            raise ValueError(f"Enter a valid duration and price for {name}.")
+        if duration <= 0:
+            raise ValueError(f"Duration for {name} must be greater than zero.")
+        if not price.is_finite() or price < 0 or price > Decimal("99999999.99"):
+            raise ValueError(f"Price for {name} must be between ₹0 and ₹99,999,999.99.")
+
+        normalized.append({
+            "name": name,
+            "duration_minutes": duration,
+            "price": float(price),
+        })
+
+    return normalized
 
 
 def get_onboarding_question(configuration, missing_fields):
@@ -437,6 +476,18 @@ class AIConfirmSetupView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if "services" in request.data:
+            try:
+                configuration.services = validate_preview_services(
+                    request.data["services"]
+                )
+            except ValueError as error:
+                return Response(
+                    {"error": str(error)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            configuration.save(update_fields=["services", "updated_at"])
+
         # -----------------------------
         # 4. Validate required information
         # -----------------------------
@@ -652,6 +703,18 @@ class AIConfirmSetupView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if "services" in request.data:
+            try:
+                configuration.services = validate_preview_services(
+                    request.data["services"]
+                )
+            except ValueError as error:
+                return Response(
+                    {"error": str(error)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            configuration.save(update_fields=["services", "updated_at"])
 
         # -----------------------------
         # 4. Validate required information

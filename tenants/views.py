@@ -34,7 +34,7 @@ class TenantListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Tenant.objects.filter(
             owner=self.request.user
-        )
+        ).order_by("-created_at", "-id")
 
     def perform_create(self, serializer):
         serializer.save(

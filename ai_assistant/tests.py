@@ -287,6 +287,24 @@ class BusinessJourneyTests(TestCase):
 		self.assertEqual(self.configuration.number_of_resources, 2)
 		self.assertNotIn("How many bookable resources", response.data["message"])
 
+	def test_confirmation_saves_edited_service_price_and_duration(self):
+		response = self.client.post("/api/ai/confirm/", {
+			"conversation_id": self.conversation.id,
+			"website_style": "elegant",
+			"services": [{
+				"name": "Hair Coloring",
+				"duration_minutes": 90,
+				"price": 1250,
+			}],
+		}, format="json")
+
+		self.assertEqual(response.status_code, 201, response.data)
+		tenant = Tenant.objects.get(pk=response.data["tenant_id"])
+		service = Service.objects.get(tenant=tenant)
+		self.assertEqual(service.name, "Hair Coloring")
+		self.assertEqual(service.duration, 90)
+		self.assertEqual(service.price, 1250)
+
 	def test_confirmation_is_idempotent_and_public_booking_reaches_owner(self):
 		payload = {"conversation_id": self.conversation.id, "website_style": "elegant"}
 		first = self.client.post("/api/ai/confirm/", payload, format="json")
