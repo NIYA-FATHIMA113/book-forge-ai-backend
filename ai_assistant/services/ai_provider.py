@@ -444,6 +444,14 @@ def normalize_business_type(value):
         "football ground": "sports_turf",
         "football pitch": "sports_turf",
         "sports facility": "sports_turf",
+        "football_pitch": "sports_turf",
+        "beauty salon": "salon",
+        "hair salon": "salon",
+        "dental clinic": "clinic",
+        "dentist": "clinic",
+        "dental": "clinic",
+        "cafe": "restaurant",
+        "coffee shop": "restaurant",
     }
 
     return mapping.get(text, text)
@@ -465,6 +473,12 @@ def assert_fallback_business_info(text):
         message,
         flags=re.I,
     )
+    if not match:
+        match = re.search(
+            r"\b(?:I run|I own|my business is|our business is)\s+([A-Za-z0-9][A-Za-z0-9\s&'\-\.]*?)(?=[.!?,]|\s+we\s+offer\b|$)",
+            message,
+            flags=re.I,
+        )
     if match:
         candidate = match.group(1).strip()
         if candidate:
@@ -473,12 +487,27 @@ def assert_fallback_business_info(text):
     # Business type from football turf / sport turf wording.
     if re.search(r"\bfootball\s+turf\b|\bsports\s+turf\b|\bturf\b|\bfootball\s+ground\b|\bfootball\s+pitch\b", lower):
         info.business_type = "sports_turf"
+    elif re.search(r"\b(?:beauty\s+)?salon\b", lower):
+        info.business_type = "salon"
+    elif re.search(r"\b(?:dental\s+clinic|dentist|dental)\b", lower):
+        info.business_type = "clinic"
+    elif re.search(r"\b(?:restaurant|cafe|coffee\s+shop)\b", lower):
+        info.business_type = "restaurant"
 
-    # Services: parse the sentence after the intro and preserve each service token in order.
-    service_text = message
-    service_text = re.sub(r"\b(?:I run|We run|I own|We own|My business|Our business)\b.*?\b(?:called|named|known as)\b.*?", "", service_text, flags=re.I)
-    service_text = re.sub(r"\b(?:I run|We run|I own|We own|My business|Our business)\b.*?", "", service_text, flags=re.I)
-    service_text = re.sub(r"\b(?:we offer|we provide|we have|our services include|services include|our service include)\b", "", service_text, flags=re.I)
+    # Parse only the service clause so following hours/resource details are not
+    # accidentally turned into service names.
+    service_match = re.search(
+        r"\b(?:we offer|we provide|our services include|services include|our service include)\s+([^.!?]+)",
+        message,
+        flags=re.I,
+    )
+    service_text = service_match.group(1) if service_match else ""
+    service_text = re.sub(
+        r"(\d+\s*[- ]?a\s*[- ]?side)\s+and\s+(\d+\s*[- ]?a\s*[- ]?side\s+football)",
+        r"\1 football and \2",
+        service_text,
+        flags=re.I,
+    )
 
     chunks = re.split(r"[,;]+|\band\b|\bplus\b", service_text, flags=re.I)
     candidates = []
@@ -520,10 +549,21 @@ def assert_fallback_business_info(text):
     if days:
         info.working_days = days
 
-    # Number of resources if a natural phrase like 'We have 2 football pitches' appears.
-    resources = re.search(r"\b(?:have|offer|offers|with|including)\s+(\d+)\s+(?:football\s+pitches?|pitches?|resources?|courts?|tables?|chairs?|rooms?)\b", message, flags=re.I)
+    # Number of resources, including common number words.
+    resources = re.search(
+        r"\b(?:have|offer|offers|with|including)\s+"
+        r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+        r"(?:(?:shared|bookable|football|indoor|outdoor)\s+){0,3}"
+        r"(?:pitches?|resources?|courts?|tables?|chairs?|rooms?)\b",
+        message,
+        flags=re.I,
+    )
     if resources:
-        info.number_of_resources = int(resources.group(1))
+        count = resources.group(1).lower()
+        info.number_of_resources = int(count) if count.isdigit() else {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+        }[count]
 
     return info
 

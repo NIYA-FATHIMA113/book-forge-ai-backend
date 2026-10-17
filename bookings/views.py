@@ -127,6 +127,11 @@ class BookingListView(generics.ListAPIView):
                 "customer_phone":
                     booking.customer_phone,
 
+                "tenant": {
+                    "id": booking.tenant.id,
+                    "business_name": booking.tenant.business_name,
+                },
+
                 "booking_date":
                     booking.booking_date,
 

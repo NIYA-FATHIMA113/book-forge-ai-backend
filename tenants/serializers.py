@@ -13,6 +13,7 @@ class TenantSerializer(serializers.ModelSerializer):
             "business_name",
             "slug",
             "business_type",
+            "website_style",
             "location",
             "contact_phone",
             "contact_email",

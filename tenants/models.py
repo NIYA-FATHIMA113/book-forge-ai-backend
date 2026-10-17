@@ -5,6 +5,15 @@ from django.utils.text import slugify
 
 class Tenant(models.Model):
 
+    WEBSITE_STYLES = [
+        ("auto", "Match my business type"),
+        ("modern", "Modern and minimal"),
+        ("warm", "Warm and welcoming"),
+        ("bold", "Bold and energetic"),
+        ("elegant", "Elegant and premium"),
+        ("nature", "Natural and relaxed"),
+    ]
+
     BUSINESS_TYPES = [
         ("restaurant", "Restaurant"),
         ("salon", "Salon"),
@@ -29,6 +38,12 @@ class Tenant(models.Model):
     business_type = models.CharField(
         max_length=30,
         choices=BUSINESS_TYPES
+    )
+
+    website_style = models.CharField(
+        max_length=20,
+        choices=WEBSITE_STYLES,
+        default="auto",
     )
 
     # -----------------------------

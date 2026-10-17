@@ -103,9 +103,8 @@ def update_business_configuration(
 
     if business_info.business_name:
         # Preserve the original extracted name exactly as supplied by the user.
-        # When the model returns noise or a garbled value, keep the existing stored name.
         value = business_info.business_name.strip()
-        if value and value.lower().replace(" ", "") != "fightowngulfturf":
+        if value:
             configuration.business_name = value
 
     # -----------------------------------------
@@ -117,18 +116,10 @@ def update_business_configuration(
             business_info.business_type.strip()
         ).lower()
         # Keep the same normalized internal value used elsewhere.
-        if normalized_type in {
-            "football turf",
-            "sports turf",
-            "turf",
-            "football ground",
-            "football pitch",
-            "sports facility",
-            "sports_turf",
-        }:
-            configuration.business_type = "sports_turf"
-        else:
-            configuration.business_type = normalized_type
+        from .business_setup import BUSINESS_TYPE_MAPPING
+        configuration.business_type = BUSINESS_TYPE_MAPPING.get(
+            normalized_type, normalized_type
+        )
 
     # -----------------------------------------
     # Booking deposit

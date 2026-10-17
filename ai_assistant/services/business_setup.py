@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils.text import slugify
 
 from tenants.models import Tenant
 from services.models import Service, Resource
@@ -55,6 +56,7 @@ def create_business_from_configuration(
     configuration,
     owner,
     services_data,
+    website_style="auto",
 ):
     """
     Convert confirmed AI business configuration
@@ -88,27 +90,39 @@ def create_business_from_configuration(
             f"{configuration.business_type}"
         )
 
+    allowed_styles = {value for value, _label in Tenant.WEBSITE_STYLES}
+    if website_style not in allowed_styles:
+        raise ValueError("Choose a supported website style.")
+
     # --------------------------------
     # 2. Create / update Tenant
     # --------------------------------
 
-    tenant, created = Tenant.objects.update_or_create(
+    tenant = Tenant.objects.filter(
         owner=owner,
         business_name=configuration.business_name,
-        defaults={
-            "business_type": business_type,
-            "location": configuration.location or "",
-            "contact_phone": configuration.contact_phone or "",
-            "contact_email": configuration.contact_email or "",
-            "booking_length_minutes": (
-                configuration.booking_length_minutes
-            ),
-            "booking_deposit": (
-                configuration.booking_deposit
-            ),
-            "is_active": True,
-        },
-    )
+    ).first()
+    if tenant is None:
+        base_slug = slugify(configuration.business_name) or "business"
+        slug = base_slug
+        suffix = 2
+        while Tenant.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        tenant = Tenant(
+            owner=owner,
+            business_name=configuration.business_name,
+            slug=slug,
+        )
+    tenant.business_type = business_type
+    tenant.website_style = website_style
+    tenant.location = configuration.location or ""
+    tenant.contact_phone = configuration.contact_phone or ""
+    tenant.contact_email = configuration.contact_email or ""
+    tenant.booking_length_minutes = configuration.booking_length_minutes
+    tenant.booking_deposit = configuration.booking_deposit
+    tenant.is_active = True
+    tenant.save()
 
     # --------------------------------
     # 3. Create / update Services
@@ -161,10 +175,6 @@ def create_business_from_configuration(
     # --------------------------------
     # 5. Create Business Hours
     # --------------------------------
-    print("AI WORKING DAYS:", configuration.working_days)
-    print("AI OPENING TIME:", configuration.opening_time)
-    print("AI CLOSING TIME:", configuration.closing_time)
-    
     working_days = (
         configuration.working_days
         or []
@@ -198,6 +208,17 @@ def create_business_from_configuration(
                 "is_closed": False,
             },
         )
+
+    # Keep records consistent if the owner revises days/resources before
+    # confirming again. Existing bookings retain their resource FK, so don't
+    # delete resources that are already referenced.
+    BusinessHours.objects.filter(tenant=tenant).exclude(
+        day_of_week__in=open_days
+    ).delete()
+    resource_names = [f"Resource {number}" for number in range(1, number_of_resources + 1)]
+    Resource.objects.filter(tenant=tenant).exclude(name__in=resource_names).exclude(
+        bookings__isnull=False
+    ).delete()
 
     # --------------------------------
     # 7. Return Tenant

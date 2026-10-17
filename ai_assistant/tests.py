@@ -18,6 +18,8 @@ from ai_assistant.services.business_setup import create_business_from_configurat
 from ai_assistant.views import get_onboarding_question
 from services.models import Service, Resource
 from availability.models import BusinessHours
+from tenants.models import Tenant
+from datetime import date, timedelta
 
 
 class AIProviderTests(TestCase):
@@ -230,3 +232,105 @@ class AIProviderTests(TestCase):
 		time_info = assert_fallback_business_info("6 AM to 11 PM")
 		self.assertEqual(time_info.opening_time, "06:00")
 		self.assertEqual(time_info.closing_time, "23:00")
+
+	def test_complete_turf_description_is_recovered_deterministically(self):
+		info = assert_fallback_business_info(
+			"I run Hightown Turf. We offer 5-a-side and 7-a-side football. "
+			"We are open from 6 AM to 11 PM, Monday to Saturday, "
+			"and have two pitches."
+		)
+		self.assertEqual(info.business_type, "sports_turf")
+		self.assertEqual(info.opening_time, "06:00")
+		self.assertEqual(info.closing_time, "23:00")
+		self.assertEqual(info.working_days, [
+			"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+		])
+		self.assertEqual(info.number_of_resources, 2)
+		self.assertEqual([service.name for service in info.services], [
+			"5-a-side football", "7-a-side football",
+		])
+
+	def test_shared_football_pitches_are_counted(self):
+		info = assert_fallback_business_info(
+			"We have two shared football pitches available for bookings."
+		)
+		self.assertEqual(info.number_of_resources, 2)
+
+
+class BusinessJourneyTests(TestCase):
+	def setUp(self):
+		self.owner = User.objects.create_user(username="journey-owner", password="pass")
+		self.client = APIClient()
+		self.client.force_authenticate(self.owner)
+		self.conversation = AIConversation.objects.create(owner=self.owner)
+		self.configuration = BusinessConfiguration.objects.create(
+			conversation=self.conversation,
+			business_name="Hightown Turf",
+			business_type="sports_turf",
+			services=[{"name": "5-a-side football", "duration_minutes": 60, "price": 20}],
+			opening_time=time(6, 0), closing_time=time(23, 0),
+			working_days=["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+			number_of_resources=2,
+		)
+
+	def test_chat_stores_shared_pitch_answer_instead_of_asking_again(self):
+		self.configuration.number_of_resources = None
+		self.configuration.save()
+		with patch("ai_assistant.views.extract_business_info", return_value=BusinessInfo()):
+			response = self.client.post("/api/ai/chat/", {
+				"conversation_id": self.conversation.id,
+				"message": "We have two shared football pitches available for bookings.",
+			}, format="json")
+
+		self.assertEqual(response.status_code, 200, response.data)
+		self.configuration.refresh_from_db()
+		self.assertEqual(self.configuration.number_of_resources, 2)
+		self.assertNotIn("How many bookable resources", response.data["message"])
+
+	def test_confirmation_is_idempotent_and_public_booking_reaches_owner(self):
+		payload = {"conversation_id": self.conversation.id, "website_style": "elegant"}
+		first = self.client.post("/api/ai/confirm/", payload, format="json")
+		second = self.client.post("/api/ai/confirm/", payload, format="json")
+		self.assertEqual(first.status_code, 201)
+		self.assertEqual(second.status_code, 201)
+		self.assertEqual(first.data["slug"], "hightown-turf")
+		self.assertEqual(first.data["public_url"], "/book/hightown-turf")
+		self.assertEqual(first.data["website_style"], "elegant")
+		tenant = Tenant.objects.get(pk=first.data["tenant_id"])
+		self.assertEqual(Service.objects.filter(tenant=tenant).count(), 1)
+		self.assertEqual(Resource.objects.filter(tenant=tenant).count(), 2)
+		self.assertEqual(BusinessHours.objects.filter(tenant=tenant).count(), 7)
+
+		public = APIClient()
+		business = public.get(f"/api/tenants/public/{tenant.slug}/")
+		services = public.get(f"/api/book/{tenant.slug}/services/")
+		self.assertEqual(business.data["business_name"], "Hightown Turf")
+		self.assertEqual(business.data["website_style"], "elegant")
+		public_services = services.data.get("results", services.data)
+		self.assertEqual([item["name"] for item in public_services], ["5-a-side football"])
+
+		booking_date = date.today() + timedelta(days=1)
+		# Find the next configured day to keep the test independent of weekday.
+		while booking_date.weekday() not in range(7):
+			booking_date += timedelta(days=1)
+		available = public.get(
+			f"/api/book/{tenant.slug}/available-slots/",
+			{"date": booking_date.isoformat(), "service": public_services[0]["id"]},
+		)
+		self.assertEqual(available.status_code, 200)
+		self.assertTrue(available.data["available_slots"])
+		created = public.post(f"/api/book/{tenant.slug}/", {
+			"customer_name": "A Customer", "customer_phone": "1234567890",
+			"booking_date": booking_date.isoformat(),
+			"booking_time": available.data["available_slots"][0],
+			"service": public_services[0]["id"],
+		}, format="json")
+		self.assertEqual(created.status_code, 201, created.data)
+		owner_bookings = self.client.get("/api/bookings/")
+		self.assertEqual(owner_bookings.data["count"], 1)
+		self.assertEqual(owner_bookings.data["results"][0]["customer_name"], "A Customer")
+		self.assertEqual(owner_bookings.data["results"][0]["tenant"]["business_name"], "Hightown Turf")
+		other = User.objects.create_user(username="other-owner", password="pass")
+		other_client = APIClient()
+		other_client.force_authenticate(other)
+		self.assertEqual(other_client.get("/api/bookings/").data["count"], 0)

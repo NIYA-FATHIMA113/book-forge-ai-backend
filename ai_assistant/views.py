@@ -15,7 +15,6 @@ from .services.configuration_validator import (
 from .serializers import AIChatSerializer
 
 from .services.ai_provider import (
-    generate_ai_response,
     extract_business_info,
     assert_fallback_business_info,
 )
@@ -92,7 +91,6 @@ from .services.configuration_validator import (
 from .serializers import AIChatSerializer
 
 from .services.ai_provider import (
-    generate_ai_response,
     extract_business_info,
     assert_fallback_business_info,
 )
@@ -248,18 +246,25 @@ class AIChatView(APIView):
         # surfaced the owner fields, route to a deterministic parser over the
         # current message. This keeps the transition from field extraction to
         # validator and question generator driven by Django state.
-        has_structured_data = any([
-            business_info.business_name,
-            business_info.business_type,
-            business_info.services,
-            business_info.opening_time,
-            business_info.closing_time,
-            business_info.working_days,
-            business_info.number_of_resources,
-        ])
-        if not has_structured_data:
-            fallback_info = assert_fallback_business_info(message)
-            business_info = fallback_info
+        fallback_info = assert_fallback_business_info(message)
+        if fallback_info.business_name:
+            business_info.business_name = fallback_info.business_name
+        if not business_info.business_type:
+            business_info.business_type = fallback_info.business_type
+        if not business_info.opening_time:
+            business_info.opening_time = fallback_info.opening_time
+        if not business_info.closing_time:
+            business_info.closing_time = fallback_info.closing_time
+        if not business_info.working_days:
+            business_info.working_days = fallback_info.working_days
+        if business_info.number_of_resources is None:
+            business_info.number_of_resources = fallback_info.number_of_resources
+        if fallback_info.services:
+            known_names = {service.name.strip().lower() for service in business_info.services}
+            business_info.services.extend(
+                service for service in fallback_info.services
+                if service.name.strip().lower() not in known_names
+            )
 
         # -----------------------------
         # 8. Update configuration
@@ -278,15 +283,10 @@ class AIChatView(APIView):
         # -----------------------------
 
         if validation["is_complete"]:
-            try:
-                ai_response = generate_ai_response(
-                    conversation_history
-                )
-            except RuntimeError as exc:
-                return Response(
-                    {"error": str(exc)},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
+            ai_response = (
+                "Your business configuration is ready for review. "
+                "Check the preview below, then confirm to create your booking website."
+            )
         else:
             ai_response = get_onboarding_question(
                 configuration,
@@ -441,13 +441,14 @@ class AIConfirmSetupView(APIView):
         # 4. Validate required information
         # -----------------------------
 
-        if not configuration.check_completion():
+        validation = validate_business_configuration(configuration)
+        if not validation["is_complete"]:
 
             return Response(
                 {
                     "error": "Business setup is incomplete.",
                     "missing_fields": (
-                        configuration.get_missing_fields()
+                        validation["missing_fields"]
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -503,6 +504,7 @@ class AIConfirmSetupView(APIView):
                 configuration,
                 request.user,
                 configuration.services,
+                request.data.get("website_style", "auto"),
             )
 
         except ValueError as e:
@@ -537,8 +539,11 @@ class AIConfirmSetupView(APIView):
                     "successfully."
                 ),
                 "tenant_id": tenant.id,
+                "business_id": tenant.id,
                 "business_name": tenant.business_name,
                 "slug": tenant.slug,
+                "website_style": tenant.website_style,
+                "public_url": f"/book/{tenant.slug}",
             },
             status=status.HTTP_201_CREATED,
         )
@@ -652,13 +657,14 @@ class AIConfirmSetupView(APIView):
         # 4. Validate required information
         # -----------------------------
 
-        if not configuration.check_completion():
+        validation = validate_business_configuration(configuration)
+        if not validation["is_complete"]:
 
             return Response(
                 {
                     "error": "Business setup is incomplete.",
                     "missing_fields": (
-                        configuration.get_missing_fields()
+                        validation["missing_fields"]
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -714,6 +720,7 @@ class AIConfirmSetupView(APIView):
                 configuration,
                 request.user,
                 configuration.services,
+                request.data.get("website_style", "auto"),
             )
 
         except ValueError as e:
@@ -748,8 +755,11 @@ class AIConfirmSetupView(APIView):
                     "successfully."
                 ),
                 "tenant_id": tenant.id,
+                "business_id": tenant.id,
                 "business_name": tenant.business_name,
                 "slug": tenant.slug,
+                "website_style": tenant.website_style,
+                "public_url": f"/book/{tenant.slug}",
             },
             status=status.HTTP_201_CREATED,
         )
