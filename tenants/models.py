@@ -12,6 +12,9 @@ class Tenant(models.Model):
         ("bold", "Bold and energetic"),
         ("elegant", "Elegant and premium"),
         ("nature", "Natural and relaxed"),
+        ("3d", "3D motion"),
+        ("illustrated", "Illustrated"),
+        ("playful", "Cartoon pop"),
     ]
 
     BUSINESS_TYPES = [

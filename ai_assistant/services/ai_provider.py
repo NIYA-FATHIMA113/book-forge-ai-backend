@@ -407,7 +407,10 @@ def expand_working_days_from_text(text):
         "Sunday",
     ]
 
-    range_match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b\s*(?:to|-)\s*\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", lower, flags=re.I)
+    if re.search(r"\b(?:daily|every day|all week|7 days a week)\b", lower, flags=re.I):
+        return ordered
+
+    range_match = re.search(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b\s*(?:to|through|thru|-)\s*\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", lower, flags=re.I)
     if range_match:
         start = normalize_day_name(range_match.group(1))
         end = normalize_day_name(range_match.group(2))
@@ -494,45 +497,75 @@ def assert_fallback_business_info(text):
     elif re.search(r"\b(?:restaurant|cafe|coffee\s+shop)\b", lower):
         info.business_type = "restaurant"
 
-    # Parse only the service clause so following hours/resource details are not
-    # accidentally turned into service names.
+    # Parse natural service phrasing, keeping duration and price attached to
+    # each service when the owner provides a semicolon-separated list.
     service_match = re.search(
-        r"\b(?:we offer|we provide|our services include|services include|our service include)\s+([^.!?]+)",
+        r"\b(?:our\s+)?services?(?:\s+(?:are|include|includes|such as)\s*|:)\s*|"
+        r"\b(?:we offer|we provide|we serve|offerings include)\s*",
         message,
         flags=re.I,
     )
-    service_text = service_match.group(1) if service_match else ""
-    service_text = re.sub(
-        r"(\d+\s*[- ]?a\s*[- ]?side)\s+and\s+(\d+\s*[- ]?a\s*[- ]?side\s+football)",
-        r"\1 football and \2",
-        service_text,
-        flags=re.I,
-    )
-
-    chunks = re.split(r"[,;]+|\band\b|\bplus\b", service_text, flags=re.I)
-    candidates = []
-    for chunk in chunks:
-        raw = re.sub(r"[^A-Za-z0-9\-\s]", "", chunk).strip()
-        if not raw:
-            continue
-        lowered = raw.lower()
-        if lowered in {"football turf", "sports turf", "turf", ""}:
-            continue
-        if any(token in lowered for token in ["opening", "closing", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "business", "time", "hours", "days"]):
-            continue
-        raw = re.sub(r"\b(?:offer|offers|provided|provide|service|services|facility|facilities|include|includes)\b", "", raw, flags=re.I)
-        raw = re.sub(r"\s+", " ", raw).strip()
-        if raw and raw.lower() not in {"football turf", "sports turf", "turf", ""}:
-            candidates.append(raw)
-
-    seen = set()
     service_infos = []
-    for name in candidates:
-        key = name.strip().lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        service_infos.append(ServiceInfo(name=name.strip(), price=None, duration_minutes=None))
+    if service_match:
+        service_text = message[service_match.end():]
+        service_text = re.split(
+            r"[.!?\n]|\b(?:we require|we need|our phone|our email|contact us)\b",
+            service_text,
+            maxsplit=1,
+            flags=re.I,
+        )[0]
+        service_text = re.sub(
+            r"(\d+\s*[- ]?a\s*[- ]?side)\s+and\s+(\d+\s*[- ]?a\s*[- ]?side\s+football)",
+            r"\1 football and \2",
+            service_text,
+            flags=re.I,
+        )
+        chunks = (
+            re.split(r";", service_text)
+            if ";" in service_text
+            else re.split(r",|\band\b|\bplus\b", service_text, flags=re.I)
+        )
+        seen = set()
+        for chunk in chunks:
+            raw = re.sub(r"^\s*(?:and|plus)\s+", "", chunk.strip(), flags=re.I)
+            duration_match = re.search(
+                r"\b(\d+)\s*(?:minutes?|mins?)\b|\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b",
+                raw,
+                flags=re.I,
+            )
+            duration = None
+            if duration_match:
+                duration = (
+                    int(duration_match.group(1))
+                    if duration_match.group(1)
+                    else int(float(duration_match.group(2)) * 60)
+                )
+
+            price_match = re.search(
+                r"(?:\u20b9|INR\s*|Rs\.?\s*)([\d,]+(?:\.\d{1,2})?)|"
+                r"([\d,]+(?:\.\d{1,2})?)\s*(?:INR|rupees?)\b",
+                raw,
+                flags=re.I,
+            )
+            price = None
+            if price_match:
+                amount = price_match.group(1) or price_match.group(2)
+                price = float(amount.replace(",", ""))
+
+            name_part = raw
+            if duration_match:
+                name_part = name_part[:duration_match.start()]
+            if price_match:
+                name_part = name_part[:min(len(name_part), price_match.start())]
+            name = re.sub(r"[,;:\s]+$", "", name_part).strip(" \t\"'().[]{}.-")
+            name = re.sub(r"^(?:service|offering)\s*[:-]?\s*", "", name, flags=re.I)
+            if name and name.casefold() not in seen:
+                seen.add(name.casefold())
+                service_infos.append(ServiceInfo(
+                    name=name,
+                    price=price,
+                    duration_minutes=duration,
+                ))
 
     if service_infos:
         info.services = service_infos
@@ -564,6 +597,46 @@ def assert_fallback_business_info(text):
             "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
             "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
         }[count]
+
+    email_match = re.search(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", message, flags=re.I)
+    if email_match:
+        info.contact_email = email_match.group(0).rstrip(".,;:")
+
+    phone_match = re.search(
+        r"\b(?:phone(?:\s+number)?|mobile(?:\s+number)?|contact(?:\s+number)?|call\s+us\s+at|reach\s+us\s+at)\s*(?:is|:)?\s*(\+?[\d][\d\s().-]{6,}\d)",
+        message,
+        flags=re.I,
+    )
+    if phone_match:
+        info.contact_phone = re.sub(r"\s+", " ", phone_match.group(1)).strip(" .,;:")
+
+    location_match = re.search(
+        r"\b(?:located|based)\s+(?:in|at)\s+([^.!?\n]+)|"
+        r"\b(?:location|address)\s*(?:is|:)?\s*([^.!?\n]+)|"
+        r"\b(?:restaurant|cafe|business)\s+in\s+([^.!?\n]+)",
+        message,
+        flags=re.I,
+    )
+    if location_match:
+        info.location = next(group for group in location_match.groups() if group).strip(" ,.;:")
+
+    deposit_match = re.search(
+        r"(?:\u20b9|INR\s*|Rs\.?\s*)([\d,]+(?:\.\d{1,2})?)\s*(?:refundable\s+)?(?:booking\s+)?deposit\b|"
+        r"\bdeposit\s*(?:is|of|:)?\s*(?:\u20b9|INR\s*|Rs\.?\s*)?([\d,]+(?:\.\d{1,2})?)",
+        message,
+        flags=re.I,
+    )
+    if deposit_match:
+        amount = deposit_match.group(1) or deposit_match.group(2)
+        info.booking_deposit = float(amount.replace(",", ""))
+
+    booking_length_match = re.search(
+        r"\b(?:standard\s+)?(?:booking|appointment)\s+(?:length|duration)\s*(?:is|of|:)?\s*(\d+)\s*(?:minutes?|mins?)\b",
+        message,
+        flags=re.I,
+    )
+    if booking_length_match:
+        info.booking_length_minutes = int(booking_length_match.group(1))
 
     return info
 
@@ -654,6 +727,10 @@ contact_phone
 contact_email
 booking_length_minutes
 number_of_resources
+
+Recognize natural phrasings such as "our services are" and semicolon-separated
+service lists. Preserve each service name and its stated duration and price.
+Capture explicitly supplied location, phone, email, and booking deposit too.
 
 IMPORTANT TIME RULES:
 

@@ -19,8 +19,11 @@ def validate_business_configuration(configuration):
     if not configuration.business_type:
         missing_fields.append("business_type")
 
-    # At least one service
-    if not configuration.services:
+    business_type = (configuration.business_type or "").strip().lower()
+
+    # Services are required for appointment businesses. Restaurants and turf
+    # businesses can be created around their bookable tables/pitches alone.
+    if business_type not in {"restaurant", "sports_turf"} and not configuration.services:
         missing_fields.append("services")
 
     # Business hours

@@ -298,12 +298,34 @@ class AIChatView(APIView):
             business_info.working_days = fallback_info.working_days
         if business_info.number_of_resources is None:
             business_info.number_of_resources = fallback_info.number_of_resources
+        for field_name in (
+            "location",
+            "contact_phone",
+            "contact_email",
+            "booking_deposit",
+            "booking_length_minutes",
+        ):
+            if getattr(business_info, field_name) in (None, ""):
+                fallback_value = getattr(fallback_info, field_name)
+                if fallback_value not in (None, ""):
+                    setattr(business_info, field_name, fallback_value)
         if fallback_info.services:
-            known_names = {service.name.strip().lower() for service in business_info.services}
-            business_info.services.extend(
-                service for service in fallback_info.services
-                if service.name.strip().lower() not in known_names
-            )
+            known_services = {
+                service.name.strip().casefold(): service
+                for service in business_info.services
+                if service.name.strip()
+            }
+            for fallback_service in fallback_info.services:
+                key = fallback_service.name.strip().casefold()
+                existing_service = known_services.get(key)
+                if existing_service is None:
+                    business_info.services.append(fallback_service)
+                    known_services[key] = fallback_service
+                    continue
+                if existing_service.price is None:
+                    existing_service.price = fallback_service.price
+                if existing_service.duration_minutes is None:
+                    existing_service.duration_minutes = fallback_service.duration_minutes
 
         # -----------------------------
         # 8. Update configuration
